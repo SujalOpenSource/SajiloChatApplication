@@ -1,4 +1,9 @@
-package com.sajilochat.messagestauts.enums;
 
-public class DeliveryStatus {
+package com.sajilochat.messagestatus.enums;
+
+public enum DeliveryStatus {
+
+    SENT,
+    DELIVERED,
+    READ
 }

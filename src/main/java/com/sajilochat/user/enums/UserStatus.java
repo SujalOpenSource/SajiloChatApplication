@@ -1,4 +1,10 @@
+
 package com.sajilochat.user.enums;
 
-public class UserStatus {
+public enum UserStatus {
+
+    ACTIVE,
+    INACTIVE,
+    SUSPENDED
+
 }

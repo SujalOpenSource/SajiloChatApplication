@@ -1,4 +1,7 @@
+
 package com.sajilochat.conversation.enums;
 
-public class ConversationType {
+public enum ConversationType {
+    PRIVATE,
+    GROUP
 }

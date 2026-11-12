@@ -1,4 +1,7 @@
+
 package com.sajilochat.message.enums;
 
-public class MessageType {
+public enum MessageType {
+    TEXT,
+    SYSTEM
 }
