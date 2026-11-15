@@ -56,11 +56,21 @@ public class SecurityConfig {
                                 "/api/v1/auth/login"
                         ).permitAll()
 
-                        // Public health check
-                        .requestMatchers("/actuator/health").permitAll()
+                                .requestMatchers("/actuator/health").permitAll()
 
-                        // All other requests require authentication
-                        .anyRequest().authenticated()
+                        // Allow the initial WebSocket handshake.
+                        // JWT authentication is handled by JwtChannelInterceptor.
+                        .requestMatchers(
+                                "/ws",
+                                "/ws/**",
+                                "/stomp-test.html",
+                                "/css/**",
+                                "/js/**",
+                                "/images/**",
+                                "/favicon.ico"
+                        ).permitAll()
+
+                                .anyRequest().authenticated()
                 )
 
                 .addFilterBefore(

@@ -1,0 +1,75 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SajiloChat - WebSocket Test</title>
+
+    <link rel="stylesheet" href="/css/stomp-test.css">
+
+
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js" defer></script>
+    <script src="/js/stomp-test.js" defer></script>
+</head>
+<body>
+
+<main class="container">
+
+    <h1>SajiloChat WebSocket Test</h1>
+
+    <label for="token">JWT Access Token</label>
+    <input
+            type="password"
+            id="token"
+            placeholder="Paste your fresh JWT access token"
+            autocomplete="off"
+    >
+
+    <label for="conversationId">Conversation ID</label>
+    <input
+            type="number"
+            id="conversationId"
+            placeholder="Example: 2"
+            min="1"
+    >
+
+    <button id="connectButton" type="button">Connect</button>
+
+    <button id="subscribeButton" type="button" disabled>
+        Subscribe to Conversation
+    </button>
+
+    <div id="status">Status: Disconnected</div>
+
+    <hr>
+
+    <label for="messageInput">Message</label>
+    <input
+            type="text"
+            id="messageInput"
+            placeholder="Write a message..."
+    >
+    <div id="typingIndicator" class="typing-indicator"></div>
+
+    <button id="sendButton" type="button" disabled>
+        Send Message
+    </button>
+
+    <h3>Received Messages</h3>
+    <div id="messages"></div>
+
+    <h3>Online / Offline Presence</h3>
+    <div id="presenceEvents"></div>
+
+    <h3>Real-time Delivery and Read Receipts</h3>
+    <div id="statusUpdates"></div>
+
+    <h3>Debug Logs</h3>
+    <div id="debugLogs"></div>
+
+</main>
+
+</body>
+</html>

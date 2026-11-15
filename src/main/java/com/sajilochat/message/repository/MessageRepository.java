@@ -17,4 +17,5 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
             Long messageId,
             Long senderId
     );
+    Optional<Message> findByIdAndDeletedAtIsNull(Long id);
 }

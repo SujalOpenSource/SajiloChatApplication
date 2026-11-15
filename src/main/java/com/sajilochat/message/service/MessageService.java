@@ -10,6 +10,7 @@ import com.sajilochat.message.dto.MessageResponse;
 import com.sajilochat.message.dto.SendMessageRequest;
 import com.sajilochat.message.entity.Message;
 import com.sajilochat.message.repository.MessageRepository;
+import com.sajilochat.messagestatus.service.MessageStatusService;
 import com.sajilochat.user.entity.User;
 import com.sajilochat.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +27,11 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
+    private final MessageStatusService messageStatusService;
 
+    /**
+     * Send a message to a conversation.
+     */
     @Transactional
     public MessageResponse sendMessage(
             Long conversationId,
@@ -49,19 +54,28 @@ public class MessageService {
             );
         }
 
+        // Create the message.
         Message message = Message.createTextMessage(
                 conversation,
                 sender,
                 content
         );
 
+        // Save the message first to generate its database ID.
         Message savedMessage = messageRepository.save(message);
 
+        // Create SENT status records for all recipients.
+        messageStatusService.createStatusesForMessage(savedMessage);
+
+        // Update the conversation's latest message timestamp.
         conversation.updateLastMessageAt(Instant.now());
 
         return mapToResponse(savedMessage);
     }
 
+    /**
+     * Retrieve all non-deleted messages in a conversation.
+     */
     @Transactional(readOnly = true)
     public List<MessageResponse> getMessages(
             Long conversationId,
@@ -78,6 +92,9 @@ public class MessageService {
                 .toList();
     }
 
+    /**
+     * Edit a message sent by the authenticated user.
+     */
     @Transactional
     public MessageResponse editMessage(
             Long messageId,
@@ -110,8 +127,12 @@ public class MessageService {
         return mapToResponse(message);
     }
 
+    /**
+     * Soft-delete a message sent by the authenticated user.
+     */
     @Transactional
     public void deleteMessage(Long messageId, Long userId) {
+
         Message message = messageRepository
                 .findByIdAndSenderIdAndDeletedAtIsNull(messageId, userId)
                 .orElseThrow(() ->
@@ -128,6 +149,9 @@ public class MessageService {
         message.softDelete();
     }
 
+    /**
+     * Find a conversation only if the user is a member.
+     */
     private Conversation findConversationForMember(
             Long conversationId,
             Long userId
@@ -141,7 +165,11 @@ public class MessageService {
                 );
     }
 
+    /**
+     * Convert a Message entity into its API response DTO.
+     */
     private MessageResponse mapToResponse(Message message) {
+
         User sender = message.getSender();
 
         return new MessageResponse(
