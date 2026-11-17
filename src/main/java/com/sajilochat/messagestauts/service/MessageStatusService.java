@@ -8,11 +8,14 @@ import com.sajilochat.conversation.entity.Conversation;
 import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.message.entity.Message;
 import com.sajilochat.message.repository.MessageRepository;
+import com.sajilochat.messagestatus.dto.MessageStatusEvent;
 import com.sajilochat.messagestatus.dto.MessageStatusResponse;
 import com.sajilochat.messagestatus.entity.MessageStatus;
+import com.sajilochat.messagestatus.event.MessageStatusDeliveryEvent;
 import com.sajilochat.messagestatus.repository.MessageStatusRepository;
-import com.sajilochat.messagestatus.websocket.MessageStatusWebSocketPublisher;
+import com.sajilochat.user.entity.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,8 +28,8 @@ public class MessageStatusService {
 
     private final MessageStatusRepository messageStatusRepository;
     private final MessageRepository messageRepository;
-    private final MessageStatusWebSocketPublisher messageStatusWebSocketPublisher;
     private final BlockRepository blockRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void createStatusesForMessage(Message message) {
@@ -53,7 +56,6 @@ public class MessageStatusService {
 
         Message message = findMessage(messageId);
 
-        // Only the original sender can view recipient statuses.
         if (!message.getSender().getId().equals(currentUserId)) {
             throw new ResourceNotFoundException("Message not found");
         }
@@ -82,7 +84,7 @@ public class MessageStatusService {
 
         status.markAsDelivered();
 
-        messageStatusWebSocketPublisher.publishStatusUpdate(status);
+        publishStatusUpdate(status);
 
         return mapToResponse(status);
     }
@@ -105,9 +107,32 @@ public class MessageStatusService {
 
         status.markAsRead();
 
-        messageStatusWebSocketPublisher.publishStatusUpdate(status);
+        publishStatusUpdate(status);
 
         return mapToResponse(status);
+    }
+
+    private void publishStatusUpdate(MessageStatus status) {
+
+        Message message = status.getMessage();
+        User sender = message.getSender();
+
+        MessageStatusEvent event = new MessageStatusEvent(
+                message.getId(),
+                message.getConversation().getId(),
+                status.getRecipient().getId(),
+                status.getRecipient().getUsername(),
+                status.getStatus(),
+                status.getDeliveredAt(),
+                status.getReadAt()
+        );
+
+        eventPublisher.publishEvent(
+                new MessageStatusDeliveryEvent(
+                        sender.getUsername(),
+                        event
+                )
+        );
     }
 
     private void ensureNoBlockRelationship(
@@ -115,7 +140,6 @@ public class MessageStatusService {
             Long currentUserId
     ) {
 
-        // Group message receipts remain unaffected.
         if (conversation.getType() != ConversationType.PRIVATE) {
             return;
         }

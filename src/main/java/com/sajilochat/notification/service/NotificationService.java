@@ -1,6 +1,7 @@
 
 package com.sajilochat.notification.service;
 
+import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
 import com.sajilochat.conversation.entity.Conversation;
 import com.sajilochat.message.entity.Message;
@@ -20,6 +21,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,17 +32,11 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final ApplicationEventPublisher eventPublisher;
 
-    /**
-     * Creates notifications for all conversation members
-     * except the sender.
-     */
     @Transactional
     public void createNewMessageNotifications(Message message) {
 
         var conversation = message.getConversation();
         User sender = message.getSender();
-
-        log.info("Creating notifications for message {}", message.getId());
 
         for (var member : conversation.getMembers()) {
 
@@ -62,12 +59,6 @@ public class NotificationService {
         }
     }
 
-    /**
-     * Creates and publishes a notification for a group event.
-     *
-     * The calling service decides which group members
-     * should receive the notification.
-     */
     @Transactional
     public NotificationResponse createGroupNotification(
             User recipient,
@@ -89,9 +80,6 @@ public class NotificationService {
         return saveAndPublish(notification, recipient);
     }
 
-    /**
-     * Saves a notification and publishes its creation event.
-     */
     private NotificationResponse saveAndPublish(
             Notification notification,
             User recipient
@@ -110,18 +98,15 @@ public class NotificationService {
                 )
         );
 
-        log.info(
-                "Notification {} created for {}",
+        log.debug(
+                "Notification {} created for user {}",
                 savedNotification.getId(),
-                recipient.getUsername()
+                recipient.getId()
         );
 
         return response;
     }
 
-    /**
-     * Retrieves all notifications belonging to a user.
-     */
     public Page<NotificationResponse> getMyNotifications(
             Long userId,
             int page,
@@ -138,9 +123,6 @@ public class NotificationService {
                 .map(this::mapToResponse);
     }
 
-    /**
-     * Retrieves unread notifications.
-     */
     public Page<NotificationResponse> getMyUnreadNotifications(
             Long userId,
             int page,
@@ -157,18 +139,12 @@ public class NotificationService {
                 .map(this::mapToResponse);
     }
 
-    /**
-     * Counts unread notifications.
-     */
     public long getUnreadCount(Long userId) {
 
         return notificationRepository
                 .countByRecipientIdAndReadAtIsNull(userId);
     }
 
-    /**
-     * Marks one notification as read.
-     */
     @Transactional
     public NotificationResponse markAsRead(
             Long notificationId,
@@ -188,33 +164,25 @@ public class NotificationService {
         return mapToResponse(notification);
     }
 
-    /**
-     * Marks all unread notifications as read.
-     */
     @Transactional
     public int markAllAsRead(Long userId) {
 
-        var notifications = notificationRepository
-                .findAllByRecipientIdAndReadAtIsNullOrderByCreatedAtDesc(
-                        userId,
-                        Pageable.unpaged()
-                );
-
-        notifications.forEach(Notification::markAsRead);
-
-        return notifications.getNumberOfElements();
+        return notificationRepository.markAllUnreadAsRead(
+                userId,
+                Instant.now()
+        );
     }
 
     private Pageable createPageable(int page, int size) {
 
         if (page < 0) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "Page number cannot be negative"
             );
         }
 
         if (size < 1 || size > 100) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "Page size must be between 1 and 100"
             );
         }

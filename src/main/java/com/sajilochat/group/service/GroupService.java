@@ -14,13 +14,14 @@ import com.sajilochat.group.dto.GroupResponse;
 import com.sajilochat.group.dto.UpdateGroupMemberRoleRequest;
 import com.sajilochat.group.dto.UpdateGroupNameRequest;
 import com.sajilochat.group.enums.GroupRole;
-import com.sajilochat.group.websocket.GroupWebSocketPublisher;
+import com.sajilochat.group.event.GroupWebSocketDeliveryEvent;
 import com.sajilochat.notification.enums.NotificationType;
 import com.sajilochat.notification.service.NotificationService;
 import com.sajilochat.user.entity.User;
 import com.sajilochat.user.enums.UserStatus;
 import com.sajilochat.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,7 +42,7 @@ public class GroupService {
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
-    private final GroupWebSocketPublisher groupWebSocketPublisher;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     // CREATE GROUP
 
@@ -185,7 +186,6 @@ public class GroupService {
             }
         }
 
-        // Notify members and publish events for each newly added member.
         List<User> currentMembers = getCurrentMembers(conversation);
 
         for (User addedUser : addedUsers) {
@@ -542,14 +542,15 @@ public class GroupService {
         );
 
         recipients.stream()
-                .collect(Collectors.toMap(
-                        User::getUsername,
-                        Function.identity(),
-                        (first, second) -> first
-                ))
-                .keySet()
+                .map(User::getUsername)
+                .collect(Collectors.toSet())
                 .forEach(username ->
-                        groupWebSocketPublisher.publish(username, event)
+                        applicationEventPublisher.publishEvent(
+                                new GroupWebSocketDeliveryEvent(
+                                        username,
+                                        event
+                                )
+                        )
                 );
     }
 

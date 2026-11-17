@@ -14,12 +14,9 @@ public class GroupWebSocketPublisher {
 
     private final SimpMessagingTemplate messagingTemplate;
 
-    public void publish(
-            String recipientUsername,
-            GroupEvent event
-    ) {
+    public void publish(String recipientUsername, GroupEvent event) {
 
-        log.info(
+        log.debug(
                 "Publishing group event {} for group {} to user {}",
                 event.eventType(),
                 event.groupId(),

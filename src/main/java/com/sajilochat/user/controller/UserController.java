@@ -1,31 +1,30 @@
 
 package com.sajilochat.user.controller;
 
-import org.springframework.data.domain.Page;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import org.springframework.validation.annotation.Validated;
-
 import com.sajilochat.security.UserPrincipal;
 import com.sajilochat.user.dto.UpdateProfileRequest;
 import com.sajilochat.user.dto.UserProfileResponse;
 import com.sajilochat.user.dto.UserResponse;
 import com.sajilochat.user.service.UserService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
-
-
 @Validated
 public class UserController {
+
+    private final UserService userService;
 
     @GetMapping("/search")
     public ResponseEntity<Page<UserResponse>> searchUsers(
@@ -45,6 +44,7 @@ public class UserController {
             @Max(50)
             int size
     ) {
+
         Page<UserResponse> response = userService.searchUsers(
                 principal.getUserId(),
                 q,
@@ -55,12 +55,11 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
-    private final UserService userService;
-
     @GetMapping("/me")
     public ResponseEntity<UserProfileResponse> getMyProfile(
             @AuthenticationPrincipal UserPrincipal principal
     ) {
+
         UserProfileResponse response =
                 userService.getMyProfile(principal.getUserId());
 
@@ -72,6 +71,7 @@ public class UserController {
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody UpdateProfileRequest request
     ) {
+
         UserProfileResponse response =
                 userService.updateMyProfile(
                         principal.getUserId(),
@@ -83,9 +83,14 @@ public class UserController {
 
     @GetMapping("/{id}")
     public ResponseEntity<UserResponse> getPublicProfile(
-            @PathVariable Long id
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        UserResponse response = userService.getPublicProfile(id);
+
+        UserResponse response = userService.getPublicProfile(
+                id,
+                principal.getUserId()
+        );
 
         return ResponseEntity.ok(response);
     }

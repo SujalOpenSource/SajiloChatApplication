@@ -35,6 +35,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
                   OR LOWER(u.firstName) LIKE LOWER(CONCAT('%', :query, '%'))
                   OR LOWER(u.lastName) LIKE LOWER(CONCAT('%', :query, '%'))
               )
+              AND NOT EXISTS (
+                  SELECT b.id
+                  FROM UserBlock b
+                  WHERE b.blocker.id = :currentUserId
+                    AND b.blocked.id = u.id
+              )
+              AND NOT EXISTS (
+                  SELECT b.id
+                  FROM UserBlock b
+                  WHERE b.blocker.id = u.id
+                    AND b.blocked.id = :currentUserId
+              )
             ORDER BY u.username ASC
             """)
     Page<User> searchUsers(

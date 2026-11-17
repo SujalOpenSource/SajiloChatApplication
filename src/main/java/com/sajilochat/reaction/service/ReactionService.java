@@ -12,11 +12,12 @@ import com.sajilochat.message.repository.MessageRepository;
 import com.sajilochat.reaction.dto.AddReactionRequest;
 import com.sajilochat.reaction.dto.ReactionResponse;
 import com.sajilochat.reaction.entity.MessageReaction;
+import com.sajilochat.reaction.event.ReactionEvent;
 import com.sajilochat.reaction.repository.MessageReactionRepository;
 import com.sajilochat.user.entity.User;
 import com.sajilochat.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +33,7 @@ public class ReactionService {
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
     private final BlockRepository blockRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ReactionResponse addOrUpdateReaction(
@@ -118,9 +119,11 @@ public class ReactionService {
 
         MessageReaction reaction = reactionRepository
                 .findByMessageIdAndUserId(messageId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Reaction not found"
-                ));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Reaction not found"
+                        )
+                );
 
         ReactionResponse response = mapToResponse(reaction);
 
@@ -143,12 +146,16 @@ public class ReactionService {
         }
 
         Long otherUserId = conversation.getMembers().stream()
-                .filter(member -> !member.getUser().getId().equals(userId))
+                .filter(member ->
+                        !member.getUser().getId().equals(userId)
+                )
                 .map(member -> member.getUser().getId())
                 .findFirst()
-                .orElseThrow(() -> new BadRequestException(
-                        "Private conversation participant could not be found"
-                ));
+                .orElseThrow(() ->
+                        new BadRequestException(
+                                "Private conversation participant could not be found"
+                        )
+                );
 
         boolean blockedByCurrentUser =
                 blockRepository.existsByBlockerIdAndBlockedId(
@@ -170,17 +177,21 @@ public class ReactionService {
     }
 
     private Message getMessage(Long messageId) {
+
         return messageRepository.findByIdAndDeletedAtIsNull(messageId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Message not found"
-                ));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Message not found"
+                        )
+                );
     }
 
     private User getUser(Long userId) {
+
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found"
-                ));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found")
+                );
     }
 
     private void verifyConversationMembership(
@@ -193,8 +204,8 @@ public class ReactionService {
                 .isPresent();
 
         if (!isMember) {
-            throw new BadRequestException(
-                    "You are not a member of this conversation"
+            throw new ResourceNotFoundException(
+                    "Conversation not found or you are not a member"
             );
         }
     }
@@ -221,20 +232,12 @@ public class ReactionService {
             ReactionResponse reaction
     ) {
 
-        ReactionEvent event = new ReactionEvent(
-                action,
-                reaction
+        eventPublisher.publishEvent(
+                new ReactionEvent(
+                        conversationId,
+                        action,
+                        reaction
+                )
         );
-
-        messagingTemplate.convertAndSend(
-                "/topic/conversations/" + conversationId + "/reactions",
-                event
-        );
-    }
-
-    public record ReactionEvent(
-            String action,
-            ReactionResponse reaction
-    ) {
     }
 }
