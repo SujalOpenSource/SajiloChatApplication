@@ -1,9 +1,11 @@
 
 package com.sajilochat.message.service;
 
+import com.sajilochat.block.repository.BlockRepository;
 import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
 import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.conversation.repository.ConversationRepository;
 import com.sajilochat.message.dto.EditMessageRequest;
 import com.sajilochat.message.dto.MessageResponse;
@@ -11,6 +13,7 @@ import com.sajilochat.message.dto.SendMessageRequest;
 import com.sajilochat.message.entity.Message;
 import com.sajilochat.message.repository.MessageRepository;
 import com.sajilochat.messagestatus.service.MessageStatusService;
+import com.sajilochat.notification.service.NotificationService;
 import com.sajilochat.user.entity.User;
 import com.sajilochat.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,10 +31,9 @@ public class MessageService {
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
     private final MessageStatusService messageStatusService;
+    private final NotificationService notificationService;
+    private final BlockRepository blockRepository;
 
-    /**
-     * Send a message to a conversation.
-     */
     @Transactional
     public MessageResponse sendMessage(
             Long conversationId,
@@ -46,36 +48,38 @@ public class MessageService {
                         new ResourceNotFoundException("User not found")
                 );
 
-        String content = request.content().trim();
+        // Enforce blocking only for private conversations.
+        // Group conversations remain unaffected.
+        if (conversation.getType() == ConversationType.PRIVATE) {
+            ensureNoBlockRelationship(conversation, senderId);
+        }
 
-        if (content.isEmpty()) {
+        if (request.content() == null ||
+                request.content().trim().isEmpty()) {
             throw new BadRequestException(
                     "Message content cannot be empty"
             );
         }
 
-        // Create the message.
+        String content = request.content().trim();
+
         Message message = Message.createTextMessage(
                 conversation,
                 sender,
                 content
         );
 
-        // Save the message first to generate its database ID.
         Message savedMessage = messageRepository.save(message);
 
-        // Create SENT status records for all recipients.
         messageStatusService.createStatusesForMessage(savedMessage);
 
-        // Update the conversation's latest message timestamp.
         conversation.updateLastMessageAt(Instant.now());
+
+        notificationService.createNewMessageNotifications(savedMessage);
 
         return mapToResponse(savedMessage);
     }
 
-    /**
-     * Retrieve all non-deleted messages in a conversation.
-     */
     @Transactional(readOnly = true)
     public List<MessageResponse> getMessages(
             Long conversationId,
@@ -92,9 +96,6 @@ public class MessageService {
                 .toList();
     }
 
-    /**
-     * Edit a message sent by the authenticated user.
-     */
     @Transactional
     public MessageResponse editMessage(
             Long messageId,
@@ -127,12 +128,8 @@ public class MessageService {
         return mapToResponse(message);
     }
 
-    /**
-     * Soft-delete a message sent by the authenticated user.
-     */
     @Transactional
     public void deleteMessage(Long messageId, Long userId) {
-
         Message message = messageRepository
                 .findByIdAndSenderIdAndDeletedAtIsNull(messageId, userId)
                 .orElseThrow(() ->
@@ -149,9 +146,42 @@ public class MessageService {
         message.softDelete();
     }
 
-    /**
-     * Find a conversation only if the user is a member.
-     */
+    private void ensureNoBlockRelationship(
+            Conversation conversation,
+            Long senderId
+    ) {
+        Long recipientId = conversation.getMembers()
+                .stream()
+                .filter(member ->
+                        !member.getUser().getId().equals(senderId)
+                )
+                .map(member -> member.getUser().getId())
+                .findFirst()
+                .orElseThrow(() ->
+                        new BadRequestException(
+                                "Private conversation participant could not be found"
+                        )
+                );
+
+        boolean blockedBySender =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        senderId,
+                        recipientId
+                );
+
+        boolean blockedByRecipient =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        recipientId,
+                        senderId
+                );
+
+        if (blockedBySender || blockedByRecipient) {
+            throw new BadRequestException(
+                    "You cannot send messages in this conversation because one of you has blocked the other"
+            );
+        }
+    }
+
     private Conversation findConversationForMember(
             Long conversationId,
             Long userId
@@ -165,11 +195,7 @@ public class MessageService {
                 );
     }
 
-    /**
-     * Convert a Message entity into its API response DTO.
-     */
     private MessageResponse mapToResponse(Message message) {
-
         User sender = message.getSender();
 
         return new MessageResponse(

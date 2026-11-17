@@ -1,6 +1,11 @@
 
 package com.sajilochat.typing.websocket;
 
+import com.sajilochat.block.repository.BlockRepository;
+import com.sajilochat.common.exception.BadRequestException;
+import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.enums.ConversationType;
+import com.sajilochat.conversation.repository.ConversationRepository;
 import com.sajilochat.security.UserPrincipal;
 import com.sajilochat.typing.dto.TypingEvent;
 import jakarta.validation.Valid;
@@ -20,6 +25,8 @@ import java.security.Principal;
 public class TypingWebSocketController {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final ConversationRepository conversationRepository;
+    private final BlockRepository blockRepository;
 
     @MessageMapping("/conversations/{conversationId}/typing")
     public void handleTypingEvent(
@@ -42,32 +49,74 @@ public class TypingWebSocketController {
             );
         }
 
-        // Prevent clients from sending an event for another conversation.
-        if (!conversationId.equals(request.conversationId())) {
-            throw new IllegalArgumentException(
+        if (request.conversationId() == null
+                || !conversationId.equals(request.conversationId())) {
+            throw new BadRequestException(
                     "Conversation ID does not match destination"
             );
         }
 
-        TypingEvent event = new TypingEvent(
+        Long userId = userPrincipal.getUserId();
+
+        Conversation conversation = conversationRepository
+                .findByIdAndMemberUserId(conversationId, userId)
+                .orElseThrow(() -> new BadRequestException(
+                        "You are not a member of this conversation"
+                ));
+
+        ensureNoBlockRelationship(conversation, userId);
+
+        TypingNotification notification = new TypingNotification(
+                userId,
+                userPrincipal.getUsername(),
                 conversationId,
                 request.typing()
         );
 
-        String destination =
-                "/topic/conversations/" + conversationId + "/typing";
-
-
-        // Broadcast typing information to conversation members.
         messagingTemplate.convertAndSend(
-                destination,
-                new TypingNotification(
-                        userPrincipal.getUserId(),
-                        userPrincipal.getUsername(),
-                        conversationId,
-                        request.typing()
-                )
+                "/topic/conversations/" + conversationId + "/typing",
+                notification
         );
+    }
+
+    private void ensureNoBlockRelationship(
+            Conversation conversation,
+            Long userId
+    ) {
+
+        // Blocking rules apply only to private conversations.
+        // Group typing events remain unaffected.
+        if (conversation.getType() != ConversationType.PRIVATE) {
+            return;
+        }
+
+        Long otherUserId = conversation.getMembers().stream()
+                .filter(member ->
+                        !member.getUser().getId().equals(userId)
+                )
+                .map(member -> member.getUser().getId())
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException(
+                        "Private conversation participant could not be found"
+                ));
+
+        boolean blockedByCurrentUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        userId,
+                        otherUserId
+                );
+
+        boolean blockedByOtherUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        otherUserId,
+                        userId
+                );
+
+        if (blockedByCurrentUser || blockedByOtherUser) {
+            throw new BadRequestException(
+                    "Typing indicators are unavailable because one of you has blocked the other"
+            );
+        }
     }
 
     public record TypingNotification(

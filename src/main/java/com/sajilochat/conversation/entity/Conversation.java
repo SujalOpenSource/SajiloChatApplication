@@ -2,6 +2,7 @@
 package com.sajilochat.conversation.entity;
 
 import com.sajilochat.conversation.enums.ConversationType;
+import com.sajilochat.group.enums.GroupRole;
 import com.sajilochat.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -96,20 +97,60 @@ public class Conversation {
         conversation.createdBy = creator;
         conversation.name = name;
 
-        conversation.addMember(creator);
+        conversation.addMember(creator, GroupRole.ADMIN);
 
         return conversation;
     }
 
     public void addMember(User user) {
+
+        GroupRole role = type == ConversationType.GROUP
+                ? GroupRole.MEMBER
+                : null;
+
+        addMember(user, role);
+    }
+
+    public void addMember(User user, GroupRole groupRole) {
+
         boolean alreadyMember = members.stream()
                 .anyMatch(member ->
                         member.getUser().getId().equals(user.getId())
                 );
 
-        if (!alreadyMember) {
-            members.add(new ConversationMember(this, user));
+        if (alreadyMember) {
+            return;
         }
+
+        if (type == ConversationType.GROUP && groupRole == null) {
+            throw new IllegalArgumentException(
+                    "Group members must have a group role"
+            );
+        }
+
+        if (type == ConversationType.PRIVATE && groupRole != null) {
+            throw new IllegalArgumentException(
+                    "Private conversation members cannot have group roles"
+            );
+        }
+
+        members.add(new ConversationMember(this, user, groupRole));
+    }
+
+    public void removeMember(Long userId) {
+        members.removeIf(member ->
+                member.getUser().getId().equals(userId)
+        );
+    }
+
+    public void updateName(String name) {
+        if (type != ConversationType.GROUP) {
+            throw new IllegalStateException(
+                    "Only group conversations can have their name updated"
+            );
+        }
+
+        this.name = name;
     }
 
     public void updateLastMessageAt(Instant lastMessageAt) {

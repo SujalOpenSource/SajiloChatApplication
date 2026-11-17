@@ -9,7 +9,6 @@
 
     <link rel="stylesheet" href="/css/stomp-test.css">
 
-
     <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js" defer></script>
     <script src="/js/stomp-test.js" defer></script>
 </head>
@@ -45,12 +44,21 @@
 
     <hr>
 
+    <h3>Group Events</h3>
+    <div id="groupEvents"></div>
+
+    <h3>Notifications</h3>
+    <div id="notificationEvents"></div>
+
+    <hr>
+
     <label for="messageInput">Message</label>
     <input
             type="text"
             id="messageInput"
             placeholder="Write a message..."
     >
+
     <div id="typingIndicator" class="typing-indicator"></div>
 
     <button id="sendButton" type="button" disabled>

@@ -1,6 +1,13 @@
 
 package com.sajilochat.user.controller;
 
+import org.springframework.data.domain.Page;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import org.springframework.validation.annotation.Validated;
+
 import com.sajilochat.security.UserPrincipal;
 import com.sajilochat.user.dto.UpdateProfileRequest;
 import com.sajilochat.user.dto.UserProfileResponse;
@@ -15,7 +22,38 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
+
+
+@Validated
 public class UserController {
+
+    @GetMapping("/search")
+    public ResponseEntity<Page<UserResponse>> searchUsers(
+            @AuthenticationPrincipal UserPrincipal principal,
+
+            @RequestParam
+            @NotBlank
+            @Size(min = 2, max = 50)
+            String q,
+
+            @RequestParam(defaultValue = "0")
+            @Min(0)
+            int page,
+
+            @RequestParam(defaultValue = "20")
+            @Min(1)
+            @Max(50)
+            int size
+    ) {
+        Page<UserResponse> response = userService.searchUsers(
+                principal.getUserId(),
+                q,
+                page,
+                size
+        );
+
+        return ResponseEntity.ok(response);
+    }
 
     private final UserService userService;
 

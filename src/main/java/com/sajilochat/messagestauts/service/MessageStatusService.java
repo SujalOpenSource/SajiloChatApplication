@@ -1,7 +1,11 @@
 
 package com.sajilochat.messagestatus.service;
 
+import com.sajilochat.block.repository.BlockRepository;
+import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
+import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.message.entity.Message;
 import com.sajilochat.message.repository.MessageRepository;
 import com.sajilochat.messagestatus.dto.MessageStatusResponse;
@@ -22,6 +26,7 @@ public class MessageStatusService {
     private final MessageStatusRepository messageStatusRepository;
     private final MessageRepository messageRepository;
     private final MessageStatusWebSocketPublisher messageStatusWebSocketPublisher;
+    private final BlockRepository blockRepository;
 
     @Transactional
     public void createStatusesForMessage(Message message) {
@@ -70,6 +75,11 @@ public class MessageStatusService {
                 currentUserId
         );
 
+        ensureNoBlockRelationship(
+                status.getMessage().getConversation(),
+                currentUserId
+        );
+
         status.markAsDelivered();
 
         messageStatusWebSocketPublisher.publishStatusUpdate(status);
@@ -88,11 +98,56 @@ public class MessageStatusService {
                 currentUserId
         );
 
+        ensureNoBlockRelationship(
+                status.getMessage().getConversation(),
+                currentUserId
+        );
+
         status.markAsRead();
 
         messageStatusWebSocketPublisher.publishStatusUpdate(status);
 
         return mapToResponse(status);
+    }
+
+    private void ensureNoBlockRelationship(
+            Conversation conversation,
+            Long currentUserId
+    ) {
+
+        // Group message receipts remain unaffected.
+        if (conversation.getType() != ConversationType.PRIVATE) {
+            return;
+        }
+
+        Long otherUserId = conversation.getMembers()
+                .stream()
+                .filter(member ->
+                        !member.getUser().getId().equals(currentUserId)
+                )
+                .map(member -> member.getUser().getId())
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException(
+                        "Private conversation participant could not be found"
+                ));
+
+        boolean blockedByCurrentUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        currentUserId,
+                        otherUserId
+                );
+
+        boolean blockedByOtherUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        otherUserId,
+                        currentUserId
+                );
+
+        if (blockedByCurrentUser || blockedByOtherUser) {
+            throw new BadRequestException(
+                    "Message status updates are unavailable because one of you has blocked the other"
+            );
+        }
     }
 
     private MessageStatus findRecipientStatus(

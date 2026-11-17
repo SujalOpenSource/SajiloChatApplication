@@ -4,7 +4,11 @@ package com.sajilochat.attachment.service;
 import com.sajilochat.attachment.dto.AttachmentResponse;
 import com.sajilochat.attachment.entity.Attachment;
 import com.sajilochat.attachment.repository.AttachmentRepository;
+import com.sajilochat.block.repository.BlockRepository;
+import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
+import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.conversation.repository.ConversationRepository;
 import com.sajilochat.message.entity.Message;
 import com.sajilochat.message.repository.MessageRepository;
@@ -53,6 +57,7 @@ public class AttachmentService {
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final ConversationRepository conversationRepository;
+    private final BlockRepository blockRepository;
 
     @Value("${app.file.storage-dir:./uploads/attachments}")
     private String storageDirectory;
@@ -66,8 +71,6 @@ public class AttachmentService {
             Long messageId,
             Long userId,
             MultipartFile file
-
-
     ) {
 
         if (file == null || file.isEmpty()) {
@@ -75,8 +78,6 @@ public class AttachmentService {
                     HttpStatus.BAD_REQUEST,
                     "Please select a file"
             );
-
-
         }
 
         if (file.getSize() > MAX_FILE_SIZE) {
@@ -86,16 +87,17 @@ public class AttachmentService {
             );
         }
 
-        // Find the message
         Message message = getMessage(messageId);
 
-        // Verify that the user belongs to the conversation
+        Conversation conversation = message.getConversation();
+
         verifyConversationMembership(
-                message.getConversation().getId(),
+                conversation.getId(),
                 userId
         );
 
-        // Only the message sender can attach files to that message
+        ensureNoBlockRelationship(conversation, userId);
+
         if (!message.getSender().getId().equals(userId)) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
@@ -105,7 +107,6 @@ public class AttachmentService {
 
         User user = getUser(userId);
 
-        // Extract and validate original filename
         String originalFileName = extractFileName(
                 file.getOriginalFilename()
         );
@@ -121,8 +122,6 @@ public class AttachmentService {
             );
         }
 
-        // Validate the MIME type supplied by the client.
-        // Some clients send application/octet-stream for valid files.
         String suppliedContentType = file.getContentType();
 
         if (suppliedContentType != null
@@ -136,7 +135,6 @@ public class AttachmentService {
             );
         }
 
-        // Prepare storage directory
         Path storageRoot = Paths.get(storageDirectory)
                 .toAbsolutePath()
                 .normalize();
@@ -146,7 +144,6 @@ public class AttachmentService {
         Path destination = storageRoot.resolve(storedFileName)
                 .normalize();
 
-        // Prevent path traversal
         if (!destination.startsWith(storageRoot)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -157,7 +154,6 @@ public class AttachmentService {
         try {
             Files.createDirectories(storageRoot);
 
-            // Store the file on the server
             try (InputStream inputStream = file.getInputStream()) {
                 Files.copy(inputStream, destination);
             }
@@ -179,10 +175,7 @@ public class AttachmentService {
                 return mapToResponse(savedAttachment);
 
             } catch (RuntimeException exception) {
-
-                // Remove the physical file if database persistence fails
                 deletePhysicalFile(destination);
-
                 throw exception;
             }
 
@@ -206,10 +199,14 @@ public class AttachmentService {
 
         Message message = getMessage(messageId);
 
+        Conversation conversation = message.getConversation();
+
         verifyConversationMembership(
-                message.getConversation().getId(),
+                conversation.getId(),
                 userId
         );
+
+        ensureNoBlockRelationship(conversation, userId);
 
         return attachmentRepository
                 .findAllByMessageIdOrderByCreatedAtAsc(messageId)
@@ -232,13 +229,16 @@ public class AttachmentService {
                         new ResourceNotFoundException("Attachment not found")
                 );
 
-        // Check conversation membership
+        Conversation conversation =
+                attachment.getMessage().getConversation();
+
         verifyConversationMembership(
-                attachment.getMessage().getConversation().getId(),
+                conversation.getId(),
                 userId
         );
 
-        // Do not allow downloading attachments of deleted messages
+        ensureNoBlockRelationship(conversation, userId);
+
         if (attachment.getMessage().getDeletedAt() != null) {
             throw new ResourceNotFoundException("Message not found");
         }
@@ -283,7 +283,6 @@ public class AttachmentService {
                         new ResourceNotFoundException("Attachment not found")
                 );
 
-        // Only the uploader can delete the attachment
         if (!attachment.getUploadedBy().getId().equals(userId)) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
@@ -318,6 +317,53 @@ public class AttachmentService {
         }
 
         attachmentRepository.delete(attachment);
+    }
+
+    // =====================================================
+    // BLOCK ENFORCEMENT
+    // =====================================================
+
+    private void ensureNoBlockRelationship(
+            Conversation conversation,
+            Long userId
+    ) {
+
+        // Blocking does not restrict group attachments.
+        if (conversation.getType() != ConversationType.PRIVATE) {
+            return;
+        }
+
+        Long otherUserId = conversation.getMembers()
+                .stream()
+                .filter(member ->
+                        !member.getUser().getId().equals(userId)
+                )
+                .map(member -> member.getUser().getId())
+                .findFirst()
+                .orElseThrow(() ->
+                        new BadRequestException(
+                                "Private conversation participant could not be found"
+                        )
+                );
+
+        boolean blockedByCurrentUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        userId,
+                        otherUserId
+                );
+
+        boolean blockedByOtherUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        otherUserId,
+                        userId
+                );
+
+        if (blockedByCurrentUser || blockedByOtherUser) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Attachments are unavailable because one of you has blocked the other"
+            );
+        }
     }
 
     // =====================================================

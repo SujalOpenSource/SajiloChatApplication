@@ -11,9 +11,60 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.sajilochat.user.enums.UserStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
+    @Transactional(readOnly = true)
+    public Page<UserResponse> searchUsers(
+            Long currentUserId,
+            String query,
+            int page,
+            int size
+    ) {
+        if (query == null || query.trim().length() < 2) {
+            throw new IllegalArgumentException(
+                    "Search query must contain at least 2 characters"
+            );
+        }
+
+        if (page < 0) {
+            throw new IllegalArgumentException(
+                    "Page number cannot be negative"
+            );
+        }
+
+        if (size < 1 || size > 50) {
+            throw new IllegalArgumentException(
+                    "Page size must be between 1 and 50"
+            );
+        }
+
+        return userRepository.searchUsers(
+                        query.trim(),
+                        currentUserId,
+                        UserStatus.ACTIVE,
+                        PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(Sort.Direction.ASC, "username")
+                        )
+                )
+                .map(user -> new UserResponse(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getFirstName(),
+                        user.getLastName(),
+                        user.getProfilePictureUrl(),
+                        user.getBio(),
+                        user.getLastSeenAt()
+                ));
+    }
 
     private final UserRepository userRepository;
 

@@ -40,7 +40,6 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
             return message;
         }
 
-        // Authenticate only when a WebSocket client connects.
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
 
             String authorizationHeader =
@@ -54,7 +53,18 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
                 );
             }
 
-            String token = authorizationHeader.substring(7);
+            String token = authorizationHeader.substring(7).trim();
+
+            if (!StringUtils.hasText(token)
+                    || token.contains(" ")
+                    || token.contains("\"")
+                    || token.contains("{")
+                    || token.contains("}")) {
+                throw new MessageDeliveryException(
+                        message,
+                        "Authorization header must contain only a JWT access token"
+                );
+            }
 
             try {
                 String username = jwtService.extractUsername(token);

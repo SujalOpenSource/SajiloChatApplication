@@ -13,21 +13,21 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(
         name = "notifications",
         indexes = {
                 @Index(
-                        name = "idx_notifications_recipient_created",
+                        name = "idx_notification_recipient_created",
                         columnList = "recipient_id, created_at"
                 ),
                 @Index(
-                        name = "idx_notifications_recipient_read",
+                        name = "idx_notification_recipient_read",
                         columnList = "recipient_id, read_at"
                 )
         }
 )
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Notification {
 
     @Id
@@ -43,7 +43,7 @@ public class Notification {
     private User actor;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(nullable = false, length = 40)
     private NotificationType type;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -63,6 +63,22 @@ public class Notification {
     @Column(name = "read_at")
     private Instant readAt;
 
+    private Notification(
+            User recipient,
+            User actor,
+            NotificationType type,
+            Conversation conversation,
+            Message message,
+            String content
+    ) {
+        this.recipient = recipient;
+        this.actor = actor;
+        this.type = type;
+        this.conversation = conversation;
+        this.message = message;
+        this.content = content;
+    }
+
     public static Notification create(
             User recipient,
             User actor,
@@ -71,16 +87,14 @@ public class Notification {
             Message message,
             String content
     ) {
-        Notification notification = new Notification();
-
-        notification.recipient = recipient;
-        notification.actor = actor;
-        notification.type = type;
-        notification.conversation = conversation;
-        notification.message = message;
-        notification.content = content;
-
-        return notification;
+        return new Notification(
+                recipient,
+                actor,
+                type,
+                conversation,
+                message,
+                content
+        );
     }
 
     public void markAsRead() {
@@ -90,11 +104,13 @@ public class Notification {
     }
 
     public boolean isRead() {
-        return this.readAt != null;
+        return readAt != null;
     }
 
     @PrePersist
     protected void onCreate() {
-        this.createdAt = Instant.now();
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
     }
 }

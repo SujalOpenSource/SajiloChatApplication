@@ -1,7 +1,11 @@
 
 package com.sajilochat.reaction.service;
 
+import com.sajilochat.block.repository.BlockRepository;
+import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
+import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.conversation.repository.ConversationRepository;
 import com.sajilochat.message.entity.Message;
 import com.sajilochat.message.repository.MessageRepository;
@@ -27,6 +31,7 @@ public class ReactionService {
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
+    private final BlockRepository blockRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
@@ -38,20 +43,22 @@ public class ReactionService {
 
         Message message = getMessage(messageId);
 
+        Conversation conversation = message.getConversation();
+
         verifyConversationMembership(
-                message.getConversation().getId(),
+                conversation.getId(),
                 userId
         );
 
+        ensureNoBlockRelationship(conversation, userId);
+
         User user = getUser(userId);
 
-        String emoji = request.emoji().trim();
-
-        if (emoji.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Emoji cannot be empty"
-            );
+        if (request.emoji() == null || request.emoji().isBlank()) {
+            throw new BadRequestException("Emoji cannot be empty");
         }
+
+        String emoji = request.emoji().trim();
 
         MessageReaction reaction = reactionRepository
                 .findByMessageIdAndUserId(messageId, userId)
@@ -69,7 +76,7 @@ public class ReactionService {
         ReactionResponse response = mapToResponse(savedReaction);
 
         publishReactionEvent(
-                message.getConversation().getId(),
+                conversation.getId(),
                 "ADDED_OR_UPDATED",
                 response
         );
@@ -126,6 +133,42 @@ public class ReactionService {
         );
     }
 
+    private void ensureNoBlockRelationship(
+            Conversation conversation,
+            Long userId
+    ) {
+
+        if (conversation.getType() != ConversationType.PRIVATE) {
+            return;
+        }
+
+        Long otherUserId = conversation.getMembers().stream()
+                .filter(member -> !member.getUser().getId().equals(userId))
+                .map(member -> member.getUser().getId())
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException(
+                        "Private conversation participant could not be found"
+                ));
+
+        boolean blockedByCurrentUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        userId,
+                        otherUserId
+                );
+
+        boolean blockedByOtherUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        otherUserId,
+                        userId
+                );
+
+        if (blockedByCurrentUser || blockedByOtherUser) {
+            throw new BadRequestException(
+                    "Reactions are unavailable because one of you has blocked the other"
+            );
+        }
+    }
+
     private Message getMessage(Long messageId) {
         return messageRepository.findByIdAndDeletedAtIsNull(messageId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -150,7 +193,7 @@ public class ReactionService {
                 .isPresent();
 
         if (!isMember) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "You are not a member of this conversation"
             );
         }

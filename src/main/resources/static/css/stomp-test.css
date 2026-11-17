@@ -109,3 +109,31 @@ button:disabled {
     font-style: italic;
     color: #64748b;
 }
+
+
+.group-event,
+.notification-event {
+    padding: 12px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.group-event strong,
+.notification-event strong {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.group-event p,
+.notification-event p {
+    margin: 5px 0;
+}
+
+.group-event small,
+.notification-event small {
+    color: #777;
+    font-size: 12px;
+}
+

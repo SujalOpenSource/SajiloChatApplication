@@ -1,6 +1,7 @@
 
 package com.sajilochat.conversation.service;
 
+import com.sajilochat.block.repository.BlockRepository;
 import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
 import com.sajilochat.conversation.dto.ConversationResponse;
@@ -22,6 +23,7 @@ public class ConversationService {
 
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
+    private final BlockRepository blockRepository;
 
     @Transactional
     public ConversationResponse createPrivateConversation(
@@ -37,6 +39,9 @@ public class ConversationService {
         User currentUser = findActiveUser(currentUserId);
         User targetUser = findActiveUser(targetUserId);
 
+        // Prevent conversations if either user has blocked the other.
+        ensureNoBlockRelationship(currentUserId, targetUserId);
+
         Long lowerId = Math.min(currentUserId, targetUserId);
         Long higherId = Math.max(currentUserId, targetUserId);
 
@@ -46,7 +51,10 @@ public class ConversationService {
                 .findByPrivateConversationKey(privateKey)
                 .orElseGet(() -> {
                     Conversation newConversation =
-                            Conversation.createPrivate(currentUser, targetUser);
+                            Conversation.createPrivate(
+                                    currentUser,
+                                    targetUser
+                            );
 
                     return conversationRepository.save(newConversation);
                 });
@@ -83,7 +91,31 @@ public class ConversationService {
         return mapToResponse(conversation);
     }
 
+    private void ensureNoBlockRelationship(
+            Long currentUserId,
+            Long targetUserId
+    ) {
+        boolean blockedByCurrentUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        currentUserId,
+                        targetUserId
+                );
+
+        boolean blockedByTargetUser =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        targetUserId,
+                        currentUserId
+                );
+
+        if (blockedByCurrentUser || blockedByTargetUser) {
+            throw new BadRequestException(
+                    "Private conversations are unavailable between these users"
+            );
+        }
+    }
+
     private User findActiveUser(Long userId) {
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("User not found")

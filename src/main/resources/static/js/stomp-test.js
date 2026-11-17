@@ -1,10 +1,13 @@
 
 let stompClient = null;
 
+// Subscriptions
 let conversationSubscription = null;
 let presenceSubscription = null;
 let presenceSnapshotSubscription = null;
 let statusSubscription = null;
+let notificationSubscription = null;
+let groupEventSubscription = null;
 let typingSubscription = null;
 
 let currentUsername = null;
@@ -22,6 +25,9 @@ const processedMessageIds = new Set();
 const remoteTypingUsers = new Map();
 const remoteTypingTimeouts = new Map();
 
+
+// INITIALIZATION
+
 document.addEventListener("DOMContentLoaded", function () {
 
     document.getElementById("connectButton")
@@ -36,6 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const messageInput = document.getElementById("messageInput");
 
     messageInput.addEventListener("keydown", function (event) {
+
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             sendMessage();
@@ -47,12 +54,15 @@ document.addEventListener("DOMContentLoaded", function () {
     messageInput.addEventListener("blur", stopTyping);
 
     document.addEventListener("visibilitychange", function () {
+
         if (document.visibilityState !== "visible") {
             stopTyping();
             return;
         }
 
-        if (!stompClient || !stompClient.connected) return;
+        if (!stompClient || !stompClient.connected) {
+            return;
+        }
 
         pendingReadMessageIds.forEach(function (messageId) {
             sendReadReceipt(messageId);
@@ -64,17 +74,21 @@ document.addEventListener("DOMContentLoaded", function () {
 // STATUS AND DEBUG
 
 function updateStatus(message) {
+
     document.getElementById("status").textContent =
         "Status: " + message;
 }
 
+
 function logDebug(message) {
+
     console.log("[SajiloChat]", message);
 
     const container = document.getElementById("debugLogs");
     const entry = document.createElement("div");
 
     entry.className = "debug-entry";
+
     entry.textContent =
         new Date().toLocaleTimeString() + " - " + message;
 
@@ -85,7 +99,9 @@ function logDebug(message) {
 // JWT USERNAME EXTRACTION
 
 function getUsernameFromToken(token) {
+
     try {
+
         const payload = token.split(".")[1];
 
         if (!payload) {
@@ -108,6 +124,7 @@ function getUsernameFromToken(token) {
         return decoded.sub;
 
     } catch (error) {
+
         throw new Error("Could not read username from JWT.");
     }
 }
@@ -116,6 +133,7 @@ function getUsernameFromToken(token) {
 // CONNECT TO WEBSOCKET
 
 async function connect() {
+
     const token = document.getElementById("token").value.trim();
 
     if (!token) {
@@ -129,6 +147,7 @@ async function connect() {
     }
 
     if (stompClient) {
+
         const previousClient = stompClient;
         stompClient = null;
 
@@ -164,34 +183,45 @@ async function connect() {
         reconnectDelay: 0,
 
         onConnect: function () {
+
             updateStatus("STOMP Connected as " + currentUsername);
+
             logDebug("STOMP connection established.");
 
             document.getElementById("subscribeButton").disabled = false;
+
             connectButton.disabled = false;
 
             subscribeToStatusUpdates();
+            subscribeToNotifications();
+            subscribeToGroupEvents();
         },
 
         onStompError: function (frame) {
+
             const errorMessage =
                 frame.headers.message || "Unknown STOMP error";
 
             updateStatus("STOMP Error: " + errorMessage);
+
             logDebug("STOMP ERROR: " + errorMessage);
 
             connectButton.disabled = false;
         },
 
         onWebSocketError: function () {
+
             updateStatus("WebSocket error");
+
             logDebug("WebSocket error occurred.");
 
             connectButton.disabled = false;
         },
 
         onWebSocketClose: function () {
+
             updateStatus("WebSocket disconnected");
+
             logDebug("WebSocket connection closed.");
 
             connectButton.disabled = false;
@@ -203,6 +233,8 @@ async function connect() {
             presenceSubscription = null;
             presenceSnapshotSubscription = null;
             statusSubscription = null;
+            notificationSubscription = null;
+            groupEventSubscription = null;
             typingSubscription = null;
 
             pendingReadMessageIds.clear();
@@ -221,6 +253,7 @@ async function connect() {
     });
 
     updateStatus("Connecting...");
+
     logDebug("Connecting to WebSocket...");
 
     stompClient.activate();
@@ -230,6 +263,7 @@ async function connect() {
 // PRIVATE MESSAGE STATUS SUBSCRIPTION
 
 function subscribeToStatusUpdates() {
+
     if (statusSubscription) {
         statusSubscription.unsubscribe();
         statusSubscription = null;
@@ -237,8 +271,11 @@ function subscribeToStatusUpdates() {
 
     statusSubscription = stompClient.subscribe(
         "/user/queue/message-status",
+
         function (message) {
+
             try {
+
                 const event = JSON.parse(message.body);
 
                 logDebug(
@@ -251,9 +288,11 @@ function subscribeToStatusUpdates() {
                 displayStatusUpdate(event);
 
             } catch (error) {
+
                 logDebug("Could not parse status notification.");
             }
         },
+
         {
             id: "message-status-subscription"
         }
@@ -263,9 +302,249 @@ function subscribeToStatusUpdates() {
 }
 
 
+// PRIVATE NOTIFICATION SUBSCRIPTION
+
+function subscribeToNotifications() {
+
+    if (!stompClient || !stompClient.connected) {
+        logDebug("Cannot subscribe to notifications: STOMP disconnected.");
+        return;
+    }
+
+    if (notificationSubscription) {
+        notificationSubscription.unsubscribe();
+        notificationSubscription = null;
+    }
+
+    notificationSubscription = stompClient.subscribe(
+        "/user/queue/notifications",
+
+        function (message) {
+
+            try {
+
+                const notification = JSON.parse(message.body);
+
+                logDebug(
+                    "NEW NOTIFICATION: " + notification.content
+                );
+
+                console.log(
+                    "[SajiloChat] Notification received:",
+                    notification
+                );
+
+                displayNotification(notification);
+
+            } catch (error) {
+
+                logDebug(
+                    "Error processing notification: " + error.message
+                );
+            }
+        },
+
+        {
+            id: "notification-subscription"
+        }
+    );
+
+    logDebug("Subscribed to private notification queue.");
+}
+
+
+// PRIVATE GROUP EVENT SUBSCRIPTION
+
+function subscribeToGroupEvents() {
+
+    if (!stompClient || !stompClient.connected) {
+        logDebug("Cannot subscribe to group events: STOMP disconnected.");
+        return;
+    }
+
+    if (groupEventSubscription) {
+        groupEventSubscription.unsubscribe();
+        groupEventSubscription = null;
+    }
+
+    groupEventSubscription = stompClient.subscribe(
+        "/user/queue/group-events",
+
+        function (message) {
+
+            try {
+
+                const event = JSON.parse(message.body);
+
+                logDebug(
+                    "GROUP EVENT: " +
+                    event.eventType +
+                    " | Group: " +
+                    event.groupName
+                );
+
+                console.log(
+                    "[SajiloChat] Group event received:",
+                    event
+                );
+
+                displayGroupEvent(event);
+
+            } catch (error) {
+
+                logDebug(
+                    "Error processing group event: " + error.message
+                );
+            }
+        },
+
+        {
+            id: "group-event-subscription"
+        }
+    );
+
+    logDebug("Subscribed to private group-event queue.");
+}
+
+
+// DISPLAY NOTIFICATIONS
+
+function displayNotification(notification) {
+
+    const container = document.getElementById("notificationEvents");
+
+    if (!container) {
+        return;
+    }
+
+    const element = document.createElement("div");
+    element.className = "notification-event";
+
+    const title = document.createElement("strong");
+
+    title.textContent = notification.type || "NOTIFICATION";
+
+    const content = document.createElement("p");
+
+    content.textContent =
+        notification.content || "New notification";
+
+    const metadata = document.createElement("small");
+
+    metadata.textContent =
+        "Notification ID: " + notification.id +
+        " | " +
+        (notification.createdAt
+            ? new Date(notification.createdAt).toLocaleString()
+            : "Time unavailable");
+
+    element.appendChild(title);
+    element.appendChild(content);
+    element.appendChild(metadata);
+
+    container.prepend(element);
+}
+
+
+// DISPLAY GROUP EVENTS
+
+function displayGroupEvent(event) {
+
+    const container = document.getElementById("groupEvents");
+
+    if (!container) {
+        return;
+    }
+
+    const element = document.createElement("div");
+    element.className = "group-event";
+
+    const title = document.createElement("strong");
+
+    title.textContent = event.eventType || "GROUP EVENT";
+
+    const details = document.createElement("p");
+
+    let description = event.actorUsername || "Someone";
+
+    switch (event.eventType) {
+
+        case "GROUP_MEMBER_ADDED":
+
+            description +=
+                " added " +
+                (event.targetUsername || "a member") +
+                " to " +
+                (event.groupName || "the group");
+
+            break;
+
+        case "GROUP_MEMBER_REMOVED":
+
+            description +=
+                " removed " +
+                (event.targetUsername || "a member") +
+                " from " +
+                (event.groupName || "the group");
+
+            break;
+
+        case "GROUP_MEMBER_LEFT":
+
+            description +=
+                " left " +
+                (event.groupName || "the group");
+
+            break;
+
+        case "GROUP_NAME_UPDATED":
+
+            description +=
+                " changed the group name to " +
+                (event.groupName || "Unknown");
+
+            break;
+
+        case "GROUP_MEMBER_ROLE_UPDATED":
+
+            description +=
+                " changed " +
+                (event.targetUsername || "a member") +
+                "'s role to " +
+                (event.role || "Unknown");
+
+            break;
+
+        default:
+
+            description +=
+                " performed an action in " +
+                (event.groupName || "a group");
+    }
+
+    details.textContent = description;
+
+    const metadata = document.createElement("small");
+
+    metadata.textContent =
+        "Group ID: " + event.groupId +
+        " | " +
+        (event.occurredAt
+            ? new Date(event.occurredAt).toLocaleString()
+            : "Time unavailable");
+
+    element.appendChild(title);
+    element.appendChild(details);
+    element.appendChild(metadata);
+
+    container.prepend(element);
+}
+
+
 // CONVERSATION SUBSCRIPTIONS
 
 function subscribe() {
+
     const conversationId =
         document.getElementById("conversationId").value.trim();
 
@@ -280,10 +559,12 @@ function subscribe() {
     }
 
     // Stop typing in the previous conversation.
+
     stopTyping();
     clearTypingIndicators();
 
     // Remove previous subscriptions.
+
     if (conversationSubscription) {
         conversationSubscription.unsubscribe();
         conversationSubscription = null;
@@ -313,6 +594,7 @@ function subscribe() {
     presenceChangedSinceSnapshot.clear();
 
     document.getElementById("messages").replaceChildren();
+
     document.getElementById("statusUpdates").replaceChildren();
 
     document.getElementById("presenceEvents").textContent =
@@ -337,14 +619,19 @@ function subscribe() {
 
     conversationSubscription = stompClient.subscribe(
         messageDestination,
+
         function (message) {
+
             try {
+
                 const response = JSON.parse(message.body);
 
                 if (processedMessageIds.has(response.id)) {
+
                     logDebug(
                         "Duplicate message event ignored: " + response.id
                     );
+
                     return;
                 }
 
@@ -355,20 +642,26 @@ function subscribe() {
                 displayMessage(response);
 
                 logDebug("Message sender: " + response.sender.username);
+
                 logDebug("Currently connected user: " + currentUsername);
 
                 if (response.sender.username === currentUsername) {
+
                     logDebug(
                         "Skipping receipt because this is my own message."
                     );
+
                     return;
                 }
 
                 sendDeliveryReceipt(response.id);
 
                 if (document.visibilityState === "visible") {
+
                     sendReadReceipt(response.id);
+
                 } else {
+
                     pendingReadMessageIds.add(response.id);
 
                     logDebug(
@@ -378,6 +671,7 @@ function subscribe() {
                 }
 
             } catch (error) {
+
                 logDebug(
                     "Error processing received message: " + error.message
                 );
@@ -390,8 +684,11 @@ function subscribe() {
 
     presenceSubscription = stompClient.subscribe(
         presenceDestination,
+
         function (message) {
+
             try {
+
                 const event = JSON.parse(message.body);
 
                 presenceChangedSinceSnapshot.add(event.userId);
@@ -405,6 +702,7 @@ function subscribe() {
                 console.log("Presence event:", event);
 
             } catch (error) {
+
                 logDebug(
                     "Error processing presence event: " + error.message
                 );
@@ -417,8 +715,11 @@ function subscribe() {
 
     presenceSnapshotSubscription = stompClient.subscribe(
         snapshotDestination,
+
         function (message) {
+
             try {
+
                 const snapshot = JSON.parse(message.body);
 
                 displayPresenceSnapshot(snapshot);
@@ -431,13 +732,17 @@ function subscribe() {
                 );
 
             } catch (error) {
+
                 logDebug(
                     "Error processing presence snapshot: " + error.message
                 );
 
             } finally {
+
                 if (presenceSnapshotSubscription) {
+
                     presenceSnapshotSubscription.unsubscribe();
+
                     presenceSnapshotSubscription = null;
                 }
             }
@@ -449,8 +754,11 @@ function subscribe() {
 
     typingSubscription = stompClient.subscribe(
         typingDestination,
+
         function (message) {
+
             try {
+
                 const event = JSON.parse(message.body);
 
                 if (event.conversationId != conversationId) {
@@ -458,13 +766,17 @@ function subscribe() {
                 }
 
                 // Ignore our own typing event.
+
                 if (event.username === currentUsername) {
                     return;
                 }
 
                 if (event.typing) {
+
                     showRemoteTyping(event);
+
                 } else {
+
                     removeRemoteTyping(event.username);
                 }
 
@@ -476,6 +788,7 @@ function subscribe() {
                 );
 
             } catch (error) {
+
                 logDebug(
                     "Error processing typing event: " + error.message
                 );
@@ -488,8 +801,11 @@ function subscribe() {
     updateStatus("Subscribed to conversation " + conversationId);
 
     logDebug("Subscribed to conversation messages: " + conversationId);
+
     logDebug("Subscribed to live presence: " + conversationId);
+
     logDebug("Requested initial presence snapshot: " + conversationId);
+
     logDebug("Subscribed to typing events: " + conversationId);
 }
 
@@ -497,6 +813,7 @@ function subscribe() {
 // SEND MESSAGE
 
 function sendMessage() {
+
     const conversationId =
         document.getElementById("conversationId").value;
 
@@ -518,10 +835,10 @@ function sendMessage() {
         return;
     }
 
-    // Stop typing before sending the message.
     stopTyping();
 
     stompClient.publish({
+
         destination:
             "/app/conversations/" + conversationId + "/messages",
 
@@ -539,18 +856,23 @@ function sendMessage() {
 // DELIVERY RECEIPTS
 
 function sendDeliveryReceipt(messageId) {
+
     if (!stompClient || !stompClient.connected) {
+
         logDebug(
             "Cannot send DELIVERED receipt: STOMP disconnected."
         );
+
         return;
     }
 
     logDebug("Sending DELIVERED receipt for message: " + messageId);
 
     stompClient.publish({
+
         destination:
             "/app/messages/" + messageId + "/delivered",
+
         body: ""
     });
 }
@@ -559,18 +881,23 @@ function sendDeliveryReceipt(messageId) {
 // READ RECEIPTS
 
 function sendReadReceipt(messageId) {
+
     if (!stompClient || !stompClient.connected) {
+
         logDebug(
             "Cannot send READ receipt: STOMP disconnected."
         );
+
         return;
     }
 
     logDebug("Sending READ receipt for message: " + messageId);
 
     stompClient.publish({
+
         destination:
             "/app/messages/" + messageId + "/read",
+
         body: ""
     });
 
@@ -581,19 +908,25 @@ function sendReadReceipt(messageId) {
 // DISPLAY MESSAGES
 
 function displayMessage(message) {
+
     const container = document.getElementById("messages");
 
     const messageElement = document.createElement("div");
+
     messageElement.className = "message";
 
     const sender = document.createElement("strong");
+
     sender.textContent = message.sender.username + ": ";
 
     const content = document.createElement("span");
+
     content.textContent = message.content;
 
     const messageId = document.createElement("small");
-    messageId.textContent = " (Message ID: " + message.id + ")";
+
+    messageId.textContent =
+        " (Message ID: " + message.id + ")";
 
     messageElement.appendChild(sender);
     messageElement.appendChild(content);
@@ -606,9 +939,11 @@ function displayMessage(message) {
 // DISPLAY DELIVERY / READ STATUS
 
 function displayStatusUpdate(event) {
+
     const container = document.getElementById("statusUpdates");
 
     const element = document.createElement("div");
+
     element.className = "status-event";
 
     element.textContent =
@@ -623,16 +958,20 @@ function displayStatusUpdate(event) {
 // INITIAL PRESENCE SNAPSHOT
 
 function displayPresenceSnapshot(snapshot) {
+
     if (!snapshot || !Array.isArray(snapshot.onlineUsers)) {
+
         throw new Error("Invalid presence snapshot received.");
     }
 
     snapshot.onlineUsers.forEach(function (user) {
+
         if (presenceChangedSinceSnapshot.has(user.userId)) {
             return;
         }
 
         presenceUsers.set(user.userId, {
+
             userId: user.userId,
             username: user.username,
             status: user.status || "ONLINE",
@@ -647,11 +986,19 @@ function displayPresenceSnapshot(snapshot) {
 // LIVE PRESENCE EVENTS
 
 function displayPresenceEvent(event) {
-    if (!event || event.userId == null || !event.username || !event.status) {
+
+    if (
+        !event ||
+        event.userId == null ||
+        !event.username ||
+        !event.status
+    ) {
+
         throw new Error("Invalid presence event received.");
     }
 
     presenceUsers.set(event.userId, {
+
         userId: event.userId,
         username: event.username,
         status: event.status,
@@ -665,22 +1012,28 @@ function displayPresenceEvent(event) {
 // RENDER PRESENCE USERS
 
 function renderPresenceUsers() {
+
     const container = document.getElementById("presenceEvents");
 
-    container.innerHTML = "";
+    container.replaceChildren();
 
     const users = Array.from(presenceUsers.values());
 
     if (users.length === 0) {
-        container.textContent = "No online users currently known.";
+
+        container.textContent =
+            "No online users currently known.";
+
         return;
     }
 
     users.sort(function (first, second) {
+
         return first.username.localeCompare(second.username);
     });
 
     users.forEach(function (user) {
+
         const element = document.createElement("div");
 
         element.className =
@@ -701,6 +1054,7 @@ function renderPresenceUsers() {
 // TYPING INDICATORS
 
 function handleTypingInput() {
+
     if (!stompClient || !stompClient.connected) {
         return;
     }
@@ -709,25 +1063,29 @@ function handleTypingInput() {
         return;
     }
 
-    // Notify others only when typing starts.
     if (!isCurrentlyTyping) {
+
         publishTypingStatus(true);
+
         isCurrentlyTyping = true;
 
         logDebug("Typing started.");
     }
 
-    // Reset inactivity timer.
     clearTimeout(typingTimeout);
 
     typingTimeout = setTimeout(function () {
+
         stopTyping();
+
     }, 1500);
 }
 
 
 function stopTyping() {
+
     clearTimeout(typingTimeout);
+
     typingTimeout = null;
 
     if (!isCurrentlyTyping) {
@@ -743,6 +1101,7 @@ function stopTyping() {
 
 
 function publishTypingStatus(typing) {
+
     if (!stompClient || !stompClient.connected) {
         return;
     }
@@ -752,13 +1111,16 @@ function publishTypingStatus(typing) {
     }
 
     stompClient.publish({
+
         destination:
             "/app/conversations/" +
             activeConversationId +
             "/typing",
 
         body: JSON.stringify({
+
             conversationId: Number(activeConversationId),
+
             typing: typing
         })
     });
@@ -768,6 +1130,7 @@ function publishTypingStatus(typing) {
 // SHOW REMOTE TYPING
 
 function showRemoteTyping(event) {
+
     const username = event.username;
 
     if (!username) {
@@ -779,8 +1142,11 @@ function showRemoteTyping(event) {
     clearTimeout(remoteTypingTimeouts.get(username));
 
     // Fallback if a typing=false event is missed.
+
     const timeout = setTimeout(function () {
+
         removeRemoteTyping(username);
+
     }, 5000);
 
     remoteTypingTimeouts.set(username, timeout);
@@ -792,9 +1158,15 @@ function showRemoteTyping(event) {
 // REMOVE REMOTE TYPING
 
 function removeRemoteTyping(username) {
+
+    if (!username) {
+        return;
+    }
+
     remoteTypingUsers.delete(username);
 
     clearTimeout(remoteTypingTimeouts.get(username));
+
     remoteTypingTimeouts.delete(username);
 
     renderTypingIndicator();
@@ -804,6 +1176,7 @@ function removeRemoteTyping(username) {
 // RENDER TYPING INDICATOR
 
 function renderTypingIndicator() {
+
     const container =
         document.getElementById("typingIndicator");
 
@@ -814,17 +1187,24 @@ function renderTypingIndicator() {
     const usernames = Array.from(remoteTypingUsers.keys());
 
     if (usernames.length === 0) {
+
         container.textContent = "";
+
         return;
     }
 
     if (usernames.length === 1) {
+
         container.textContent =
             usernames[0] + " is typing...";
+
     } else if (usernames.length === 2) {
+
         container.textContent =
             usernames.join(" and ") + " are typing...";
+
     } else {
+
         container.textContent =
             usernames.length + " people are typing...";
     }
@@ -834,7 +1214,9 @@ function renderTypingIndicator() {
 // CLEAR TYPING STATE
 
 function clearTypingIndicators() {
+
     clearTimeout(typingTimeout);
+
     typingTimeout = null;
 
     remoteTypingTimeouts.forEach(function (timeout) {
@@ -842,6 +1224,7 @@ function clearTypingIndicators() {
     });
 
     remoteTypingTimeouts.clear();
+
     remoteTypingUsers.clear();
 
     isCurrentlyTyping = false;

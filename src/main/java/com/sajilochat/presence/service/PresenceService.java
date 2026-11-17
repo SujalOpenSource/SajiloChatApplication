@@ -1,8 +1,9 @@
 
 package com.sajilochat.presence.service;
 
+import com.sajilochat.block.repository.BlockRepository;
 import com.sajilochat.conversation.entity.Conversation;
-import com.sajilochat.conversation.entity.ConversationMember;
+import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.conversation.repository.ConversationRepository;
 import com.sajilochat.presence.dto.PresenceEvent;
 import com.sajilochat.presence.dto.PresenceSnapshotResponse;
@@ -32,6 +33,7 @@ public class PresenceService {
 
     private final UserRepository userRepository;
     private final ConversationRepository conversationRepository;
+    private final BlockRepository blockRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     // Tracks all active WebSocket sessions for each user.
@@ -40,6 +42,7 @@ public class PresenceService {
     // Maps each WebSocket session to its user.
     private final Map<String, Long> userBySession = new HashMap<>();
 
+    @Transactional
     public synchronized void userConnected(Long userId, String sessionId) {
 
         if (userId == null || sessionId == null || sessionId.isBlank()) {
@@ -67,6 +70,7 @@ public class PresenceService {
         }
     }
 
+    @Transactional
     public synchronized void userDisconnected(String sessionId) {
 
         if (sessionId == null || sessionId.isBlank()) {
@@ -112,7 +116,7 @@ public class PresenceService {
         );
     }
 
-    // Returns the current online members of a conversation.
+    // Returns the online members visible to the requester.
     @Transactional(readOnly = true)
     public PresenceSnapshotResponse getPresenceSnapshot(
             Long conversationId,
@@ -130,7 +134,12 @@ public class PresenceService {
         List<PresenceUserResponse> onlineUsers =
                 conversation.getMembers()
                         .stream()
-                        .map(ConversationMember::getUser)
+                        .map(member -> member.getUser())
+                        .filter(user -> isVisibleToRequester(
+                                conversation,
+                                requesterId,
+                                user.getId()
+                        ))
                         .filter(user -> isOnline(user.getId()))
                         .map(user -> new PresenceUserResponse(
                                 user.getId(),
@@ -144,6 +153,26 @@ public class PresenceService {
                 onlineUsers,
                 Instant.now()
         );
+    }
+
+    // Determines whether a member's presence should be visible.
+    private boolean isVisibleToRequester(
+            Conversation conversation,
+            Long requesterId,
+            Long targetUserId
+    ) {
+
+        // A user's own presence remains visible to them.
+        if (requesterId.equals(targetUserId)) {
+            return true;
+        }
+
+        // Group presence remains available regardless of block relationships.
+        if (conversation.getType() != ConversationType.PRIVATE) {
+            return true;
+        }
+
+        return !isBlockedBetween(requesterId, targetUserId);
     }
 
     // Checks whether a user has at least one active session.
@@ -170,11 +199,47 @@ public class PresenceService {
         for (Conversation conversation :
                 conversationRepository.findAllByMemberUserId(user.getId())) {
 
+            // Do not publish private presence events when either
+            // participant has blocked the other.
+            if (conversation.getType() == ConversationType.PRIVATE) {
+
+                Long otherUserId = conversation.getMembers()
+                        .stream()
+                        .map(member -> member.getUser().getId())
+                        .filter(memberId -> !memberId.equals(user.getId()))
+                        .findFirst()
+                        .orElse(null);
+
+                // Fail closed if the private conversation has no other participant.
+                if (otherUserId == null
+                        || isBlockedBetween(user.getId(), otherUserId)) {
+                    continue;
+                }
+            }
+
+            // Group presence is still published normally.
             String destination = PRESENCE_DESTINATION
                     + conversation.getId()
                     + "/presence";
 
             messagingTemplate.convertAndSend(destination, event);
         }
+    }
+
+    private boolean isBlockedBetween(Long firstUserId, Long secondUserId) {
+
+        boolean firstBlockedSecond =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        firstUserId,
+                        secondUserId
+                );
+
+        boolean secondBlockedFirst =
+                blockRepository.existsByBlockerIdAndBlockedId(
+                        secondUserId,
+                        firstUserId
+                );
+
+        return firstBlockedSecond || secondBlockedFirst;
     }
 }

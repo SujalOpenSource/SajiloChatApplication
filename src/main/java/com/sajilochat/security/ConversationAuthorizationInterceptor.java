@@ -1,6 +1,9 @@
 
 package com.sajilochat.security;
 
+import com.sajilochat.block.repository.BlockRepository;
+import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.conversation.repository.ConversationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;
@@ -18,7 +21,8 @@ import java.security.Principal;
 
 @Component
 @RequiredArgsConstructor
-public class ConversationAuthorizationInterceptor implements ChannelInterceptor {
+public class ConversationAuthorizationInterceptor
+        implements ChannelInterceptor {
 
     private static final String SUBSCRIBE_DESTINATION =
             "/topic/conversations/";
@@ -32,7 +36,14 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
     private static final String STATUS_SUBSCRIBE_DESTINATION =
             "/user/queue/message-status";
 
+    private static final String NOTIFICATION_SUBSCRIBE_DESTINATION =
+            "/user/queue/notifications";
+
+    private static final String GROUP_EVENT_SUBSCRIBE_DESTINATION =
+            "/user/queue/group-events";
+
     private final ConversationRepository conversationRepository;
+    private final BlockRepository blockRepository;
 
     @Override
     public Message<?> preSend(
@@ -40,10 +51,11 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
             MessageChannel channel
     ) {
 
-        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(
-                message,
-                StompHeaderAccessor.class
-        );
+        StompHeaderAccessor accessor =
+                MessageHeaderAccessor.getAccessor(
+                        message,
+                        StompHeaderAccessor.class
+                );
 
         if (accessor == null) {
             return message;
@@ -66,14 +78,17 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
 
         String destination = accessor.getDestination();
 
-        if (destination == null) {
+        if (destination == null || destination.isBlank()) {
             throw new MessageDeliveryException(
                     "Subscription destination is required"
             );
         }
 
-        // Private message-status queue.
-        if (STATUS_SUBSCRIBE_DESTINATION.equals(destination)) {
+        // Private user queues.
+        if (STATUS_SUBSCRIBE_DESTINATION.equals(destination)
+                || NOTIFICATION_SUBSCRIBE_DESTINATION.equals(destination)
+                || GROUP_EVENT_SUBSCRIBE_DESTINATION.equals(destination)) {
+
             requireAuthenticatedUser(accessor.getUser());
             return;
         }
@@ -94,46 +109,31 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
         // Conversation topic subscriptions.
         if (destination.startsWith(SUBSCRIBE_DESTINATION)) {
 
-            Long conversationId;
+            String channel;
 
             if (destination.endsWith("/messages")) {
-
-                conversationId = extractConversationId(
-                        destination,
-                        SUBSCRIBE_DESTINATION,
-                        "messages"
-                );
+                channel = "messages";
 
             } else if (destination.endsWith("/presence")) {
-
-                conversationId = extractConversationId(
-                        destination,
-                        SUBSCRIBE_DESTINATION,
-                        "presence"
-                );
+                channel = "presence";
 
             } else if (destination.endsWith("/typing")) {
-
-                conversationId = extractConversationId(
-                        destination,
-                        SUBSCRIBE_DESTINATION,
-                        "typing"
-                );
+                channel = "typing";
 
             } else if (destination.endsWith("/reactions")) {
-
-                conversationId = extractConversationId(
-                        destination,
-                        SUBSCRIBE_DESTINATION,
-                        "reactions"
-                );
+                channel = "reactions";
 
             } else {
-
                 throw new MessageDeliveryException(
                         "Subscription destination is not allowed"
                 );
             }
+
+            Long conversationId = extractConversationId(
+                    destination,
+                    SUBSCRIBE_DESTINATION,
+                    channel
+            );
 
             verifyMembership(accessor.getUser(), conversationId);
             return;
@@ -148,7 +148,7 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
 
         String destination = accessor.getDestination();
 
-        if (destination == null) {
+        if (destination == null || destination.isBlank()) {
             throw new MessageDeliveryException(
                     "Message destination is required"
             );
@@ -157,30 +157,25 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
         // Conversation messages and typing events.
         if (destination.startsWith(SEND_DESTINATION)) {
 
-            Long conversationId;
+            String channel;
 
             if (destination.endsWith("/messages")) {
-
-                conversationId = extractConversationId(
-                        destination,
-                        SEND_DESTINATION,
-                        "messages"
-                );
+                channel = "messages";
 
             } else if (destination.endsWith("/typing")) {
-
-                conversationId = extractConversationId(
-                        destination,
-                        SEND_DESTINATION,
-                        "typing"
-                );
+                channel = "typing";
 
             } else {
-
                 throw new MessageDeliveryException(
                         "Message destination is not allowed"
                 );
             }
+
+            Long conversationId = extractConversationId(
+                    destination,
+                    SEND_DESTINATION,
+                    channel
+            );
 
             verifyMembership(accessor.getUser(), conversationId);
             return;
@@ -190,6 +185,7 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
         if (destination.startsWith(STATUS_SEND_DESTINATION)) {
 
             validateStatusDestination(destination);
+
             requireAuthenticatedUser(accessor.getUser());
             return;
         }
@@ -205,7 +201,7 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
                 STATUS_SEND_DESTINATION.length()
         );
 
-        String[] segments = remainingPath.split("/");
+        String[] segments = remainingPath.split("/", -1);
 
         if (segments.length != 2
                 || !("delivered".equals(segments[1])
@@ -243,7 +239,7 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
         String remainingPath =
                 destination.substring(expectedPrefix.length());
 
-        String[] segments = remainingPath.split("/");
+        String[] segments = remainingPath.split("/", -1);
 
         if (segments.length != 2
                 || !expectedChannel.equals(segments[1])) {
@@ -275,7 +271,9 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
 
     private UserPrincipal requireAuthenticatedUser(Principal principal) {
 
-        if (!(principal instanceof Authentication authentication)) {
+        if (!(principal instanceof Authentication authentication)
+                || !authentication.isAuthenticated()) {
+
             throw new AuthenticationCredentialsNotFoundException(
                     "Authenticated user not found"
             );
@@ -284,6 +282,7 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
         Object authenticatedPrincipal = authentication.getPrincipal();
 
         if (!(authenticatedPrincipal instanceof UserPrincipal userPrincipal)) {
+
             throw new AuthenticationCredentialsNotFoundException(
                     "Authenticated user not found"
             );
@@ -297,19 +296,54 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
             Long conversationId
     ) {
 
-        UserPrincipal userPrincipal = requireAuthenticatedUser(principal);
+        UserPrincipal userPrincipal =
+                requireAuthenticatedUser(principal);
 
-        boolean isMember = conversationRepository
+        Conversation conversation = conversationRepository
                 .findByIdAndMemberUserId(
                         conversationId,
                         userPrincipal.getUserId()
                 )
-                .isPresent();
+                .orElseThrow(() ->
+                        new MessageDeliveryException(
+                                "You are not a member of this conversation"
+                        )
+                );
 
-        if (!isMember) {
-            throw new MessageDeliveryException(
-                    "You are not a member of this conversation"
-            );
+        // Enforce blocking only for private conversations.
+        // Group conversations remain accessible.
+        if (conversation.getType() == ConversationType.PRIVATE) {
+
+            Long currentUserId = userPrincipal.getUserId();
+
+            Long otherUserId = conversation.getMembers()
+                    .stream()
+                    .map(member -> member.getUser().getId())
+                    .filter(memberId -> !memberId.equals(currentUserId))
+                    .findFirst()
+                    .orElseThrow(() ->
+                            new MessageDeliveryException(
+                                    "Private conversation participant could not be found"
+                            )
+                    );
+
+            boolean blockedByCurrentUser =
+                    blockRepository.existsByBlockerIdAndBlockedId(
+                            currentUserId,
+                            otherUserId
+                    );
+
+            boolean blockedByOtherUser =
+                    blockRepository.existsByBlockerIdAndBlockedId(
+                            otherUserId,
+                            currentUserId
+                    );
+
+            if (blockedByCurrentUser || blockedByOtherUser) {
+                throw new MessageDeliveryException(
+                        "Private conversation access is unavailable because one of you has blocked the other"
+                );
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 
 package com.sajilochat.conversation.entity;
 
+import com.sajilochat.group.enums.GroupRole;
 import com.sajilochat.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -21,7 +22,10 @@ import java.time.Instant;
                 )
         },
         indexes = {
-                @Index(name = "idx_conversation_members_user", columnList = "user_id")
+                @Index(
+                        name = "idx_conversation_members_user",
+                        columnList = "user_id"
+                )
         }
 )
 public class ConversationMember {
@@ -38,19 +42,40 @@ public class ConversationMember {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "group_role", length = 20)
+    private GroupRole groupRole;
+
     @Column(name = "joined_at", nullable = false, updatable = false)
     private Instant joinedAt;
 
     @Column(name = "last_read_at")
     private Instant lastReadAt;
 
-    public ConversationMember(Conversation conversation, User user) {
+    public ConversationMember(
+            Conversation conversation,
+            User user,
+            GroupRole groupRole
+    ) {
         this.conversation = conversation;
         this.user = user;
+        this.groupRole = groupRole;
     }
 
     public void updateLastReadAt(Instant lastReadAt) {
         this.lastReadAt = lastReadAt;
+    }
+
+    public boolean isAdmin() {
+        return groupRole == GroupRole.ADMIN;
+    }
+
+    public void promoteToAdmin() {
+        this.groupRole = GroupRole.ADMIN;
+    }
+
+    public void demoteToMember() {
+        this.groupRole = GroupRole.MEMBER;
     }
 
     @PrePersist

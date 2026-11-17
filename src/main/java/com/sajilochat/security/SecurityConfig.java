@@ -1,3 +1,4 @@
+
 package com.sajilochat.security;
 
 import jakarta.servlet.DispatcherType;
@@ -47,7 +48,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         // Allow Spring Boot error dispatches
-                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        .dispatcherTypeMatchers(DispatcherType.ERROR)
+                        .permitAll()
+
+                        // Allow the root page
+                        .requestMatchers(HttpMethod.GET, "/")
+                        .permitAll()
 
                         // Public authentication endpoints
                         .requestMatchers(
@@ -56,10 +62,11 @@ public class SecurityConfig {
                                 "/api/v1/auth/login"
                         ).permitAll()
 
-                                .requestMatchers("/actuator/health").permitAll()
+                        // Actuator health
+                        .requestMatchers("/actuator/health")
+                        .permitAll()
 
-                        // Allow the initial WebSocket handshake.
-                        // JWT authentication is handled by JwtChannelInterceptor.
+                        // WebSocket handshake and test frontend resources
                         .requestMatchers(
                                 "/ws",
                                 "/ws/**",
@@ -70,7 +77,8 @@ public class SecurityConfig {
                                 "/favicon.ico"
                         ).permitAll()
 
-                                .anyRequest().authenticated()
+                        // Everything else requires authentication
+                        .anyRequest().authenticated()
                 )
 
                 .addFilterBefore(
