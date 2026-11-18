@@ -2,7 +2,10 @@
 package com.sajilochat.conversation.repository;
 
 import com.sajilochat.conversation.entity.Conversation;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -27,6 +30,10 @@ public interface ConversationRepository
             @Param("userId") Long userId
     );
 
+    @EntityGraph(attributePaths = {
+            "members",
+            "members.user"
+    })
     @Query("""
             SELECT c
             FROM Conversation c
@@ -35,6 +42,19 @@ public interface ConversationRepository
             AND m.user.id = :userId
             """)
     Optional<Conversation> findByIdAndMemberUserId(
+            @Param("conversationId") Long conversationId,
+            @Param("userId") Long userId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT c
+            FROM Conversation c
+            JOIN c.members m
+            WHERE c.id = :conversationId
+            AND m.user.id = :userId
+            """)
+    Optional<Conversation> findByIdAndMemberUserIdForUpdate(
             @Param("conversationId") Long conversationId,
             @Param("userId") Long userId
     );

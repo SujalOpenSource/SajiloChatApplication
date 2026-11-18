@@ -136,7 +136,7 @@ public class GroupService {
     ) {
 
         Conversation conversation =
-                findGroupForMember(groupId, currentUserId);
+                findGroupForMemberForUpdate(groupId, currentUserId);
 
         requireAdmin(conversation, currentUserId);
 
@@ -226,7 +226,7 @@ public class GroupService {
     ) {
 
         Conversation conversation =
-                findGroupForMember(groupId, currentUserId);
+                findGroupForMemberForUpdate(groupId, currentUserId);
 
         requireAdmin(conversation, currentUserId);
 
@@ -291,7 +291,7 @@ public class GroupService {
     ) {
 
         Conversation conversation =
-                findGroupForMember(groupId, currentUserId);
+                findGroupForMemberForUpdate(groupId, currentUserId);
 
         requireAdmin(conversation, currentUserId);
 
@@ -350,7 +350,7 @@ public class GroupService {
     ) {
 
         Conversation conversation =
-                findGroupForMember(groupId, currentUserId);
+                findGroupForMemberForUpdate(groupId, currentUserId);
 
         requireAdmin(conversation, currentUserId);
 
@@ -433,7 +433,7 @@ public class GroupService {
     ) {
 
         Conversation conversation =
-                findGroupForMember(groupId, currentUserId);
+                findGroupForMemberForUpdate(groupId, currentUserId);
 
         ConversationMember currentMember =
                 findMember(conversation, currentUserId);
@@ -580,13 +580,42 @@ public class GroupService {
                                 )
                         );
 
+        validateGroupType(conversation);
+
+        return conversation;
+    }
+
+    // FIND GROUP, VERIFY MEMBERSHIP AND LOCK FOR UPDATE
+
+    private Conversation findGroupForMemberForUpdate(
+            Long groupId,
+            Long userId
+    ) {
+
+        Conversation conversation =
+                conversationRepository
+                        .findByIdAndMemberUserIdForUpdate(
+                                groupId,
+                                userId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Group not found or you are not a member"
+                                )
+                        );
+
+        validateGroupType(conversation);
+
+        return conversation;
+    }
+
+    private void validateGroupType(Conversation conversation) {
+
         if (conversation.getType() != ConversationType.GROUP) {
             throw new BadRequestException(
                     "This conversation is not a group"
             );
         }
-
-        return conversation;
     }
 
     // ADMIN AUTHORIZATION

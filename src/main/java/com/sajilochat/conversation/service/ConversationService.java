@@ -36,14 +36,23 @@ public class ConversationService {
             );
         }
 
-        User currentUser = findActiveUser(currentUserId);
-        User targetUser = findActiveUser(targetUserId);
-
-        // Prevent conversations if either user has blocked the other.
-        ensureNoBlockRelationship(currentUserId, targetUserId);
-
+        // Lock users in a consistent order to prevent concurrent
+        // requests from creating duplicate private conversations.
         Long lowerId = Math.min(currentUserId, targetUserId);
         Long higherId = Math.max(currentUserId, targetUserId);
+
+        User lowerUser = findActiveUserForUpdate(lowerId);
+        User higherUser = findActiveUserForUpdate(higherId);
+
+        User currentUser = currentUserId.equals(lowerId)
+                ? lowerUser
+                : higherUser;
+
+        User targetUser = targetUserId.equals(lowerId)
+                ? lowerUser
+                : higherUser;
+
+        ensureNoBlockRelationship(currentUserId, targetUserId);
 
         String privateKey = lowerId + ":" + higherId;
 
@@ -114,6 +123,18 @@ public class ConversationService {
         }
     }
 
+    private User findActiveUserForUpdate(Long userId) {
+
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found")
+                );
+
+        validateActiveUser(user);
+
+        return user;
+    }
+
     private User findActiveUser(Long userId) {
 
         User user = userRepository.findById(userId)
@@ -121,13 +142,18 @@ public class ConversationService {
                         new ResourceNotFoundException("User not found")
                 );
 
+        validateActiveUser(user);
+
+        return user;
+    }
+
+    private void validateActiveUser(User user) {
+
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new BadRequestException(
                     "This user account is not active"
             );
         }
-
-        return user;
     }
 
     private ConversationResponse mapToResponse(

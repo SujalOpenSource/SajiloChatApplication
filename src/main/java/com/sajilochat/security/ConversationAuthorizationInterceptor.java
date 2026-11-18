@@ -2,27 +2,30 @@
 package com.sajilochat.security;
 
 import com.sajilochat.block.repository.BlockRepository;
+import com.sajilochat.config.SessionPrincipalHandshakeHandler;
 import com.sajilochat.conversation.entity.Conversation;
 import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.conversation.repository.ConversationRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
-import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 import java.security.Principal;
+import java.util.Map;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
-public class ConversationAuthorizationInterceptor
-        implements ChannelInterceptor {
+public class ConversationAuthorizationInterceptor implements ChannelInterceptor {
 
     private static final String SUBSCRIBE_DESTINATION =
             "/topic/conversations/";
@@ -52,14 +55,10 @@ public class ConversationAuthorizationInterceptor
     ) {
 
         StompHeaderAccessor accessor =
-                MessageHeaderAccessor.getAccessor(
-                        message,
-                        StompHeaderAccessor.class
-                );
+                StompHeaderAccessor.wrap(message);
 
-        if (accessor == null) {
-            return message;
-        }
+        // Restore authentication before authorization checks.
+        restoreAuthenticatedUser(accessor);
 
         StompCommand command = accessor.getCommand();
 
@@ -71,7 +70,56 @@ public class ConversationAuthorizationInterceptor
             authorizeSend(accessor);
         }
 
-        return message;
+        // Return the message with the updated STOMP headers.
+        return MessageBuilder.createMessage(
+                message.getPayload(),
+                accessor.getMessageHeaders()
+        );
+    }
+
+    private void restoreAuthenticatedUser(StompHeaderAccessor accessor) {
+
+        // Prefer the Principal already associated with the WebSocket session.
+        if (accessor.getUser() != null) {
+            log.debug(
+                    "STOMP Principal already available: {}",
+                    accessor.getUser().getName()
+            );
+            return;
+        }
+
+        Map<String, Object> sessionAttributes =
+                accessor.getSessionAttributes();
+
+        if (sessionAttributes == null) {
+            log.warn(
+                    "STOMP session attributes are missing. Session ID: {}",
+                    accessor.getSessionId()
+            );
+            return;
+        }
+
+        Object storedAuthentication = sessionAttributes.get(
+                SessionPrincipalHandshakeHandler.AUTHENTICATION_ATTRIBUTE
+        );
+
+        if (storedAuthentication instanceof Authentication authentication
+                && authentication.isAuthenticated()) {
+
+            accessor.setUser(authentication);
+
+            log.debug(
+                    "Restored STOMP user from WebSocket session: {}",
+                    authentication.getName()
+            );
+
+        } else {
+
+            log.warn(
+                    "No authenticated user found in WebSocket session. Session ID: {}",
+                    accessor.getSessionId()
+            );
+        }
     }
 
     private void authorizeSubscription(StompHeaderAccessor accessor) {
@@ -113,16 +161,12 @@ public class ConversationAuthorizationInterceptor
 
             if (destination.endsWith("/messages")) {
                 channel = "messages";
-
             } else if (destination.endsWith("/presence")) {
                 channel = "presence";
-
             } else if (destination.endsWith("/typing")) {
                 channel = "typing";
-
             } else if (destination.endsWith("/reactions")) {
                 channel = "reactions";
-
             } else {
                 throw new MessageDeliveryException(
                         "Subscription destination is not allowed"
@@ -161,10 +205,8 @@ public class ConversationAuthorizationInterceptor
 
             if (destination.endsWith("/messages")) {
                 channel = "messages";
-
             } else if (destination.endsWith("/typing")) {
                 channel = "typing";
-
             } else {
                 throw new MessageDeliveryException(
                         "Message destination is not allowed"
@@ -213,7 +255,6 @@ public class ConversationAuthorizationInterceptor
         }
 
         try {
-
             long messageId = Long.parseLong(segments[0]);
 
             if (messageId <= 0) {
@@ -221,7 +262,6 @@ public class ConversationAuthorizationInterceptor
             }
 
         } catch (NumberFormatException exception) {
-
             throw new MessageDeliveryException(
                     null,
                     "Invalid message ID",
@@ -250,7 +290,6 @@ public class ConversationAuthorizationInterceptor
         }
 
         try {
-
             Long conversationId = Long.parseLong(segments[0]);
 
             if (conversationId <= 0) {
@@ -260,7 +299,6 @@ public class ConversationAuthorizationInterceptor
             return conversationId;
 
         } catch (NumberFormatException exception) {
-
             throw new MessageDeliveryException(
                     null,
                     "Invalid conversation ID",
@@ -271,8 +309,23 @@ public class ConversationAuthorizationInterceptor
 
     private UserPrincipal requireAuthenticatedUser(Principal principal) {
 
-        if (!(principal instanceof Authentication authentication)
-                || !authentication.isAuthenticated()) {
+        if (!(principal instanceof Authentication authentication)) {
+
+            log.error(
+                    "STOMP authentication missing or invalid. Principal type: {}",
+                    principal == null
+                            ? "null"
+                            : principal.getClass().getName()
+            );
+
+            throw new AuthenticationCredentialsNotFoundException(
+                    "Authenticated user not found"
+            );
+        }
+
+        if (!authentication.isAuthenticated()) {
+
+            log.error("STOMP Authentication is not authenticated.");
 
             throw new AuthenticationCredentialsNotFoundException(
                     "Authenticated user not found"
@@ -283,10 +336,22 @@ public class ConversationAuthorizationInterceptor
 
         if (!(authenticatedPrincipal instanceof UserPrincipal userPrincipal)) {
 
+            log.error(
+                    "Unexpected authenticated principal type: {}",
+                    authenticatedPrincipal == null
+                            ? "null"
+                            : authenticatedPrincipal.getClass().getName()
+            );
+
             throw new AuthenticationCredentialsNotFoundException(
                     "Authenticated user not found"
             );
         }
+
+        log.debug(
+                "STOMP authorization successful for user: {}",
+                authentication.getName()
+        );
 
         return userPrincipal;
     }

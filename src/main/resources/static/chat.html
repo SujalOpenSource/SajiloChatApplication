@@ -1,0 +1,118 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SajiloChat - Messages</title>
+
+    <link rel="stylesheet" href="/css/chat.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js" defer></script>
+    <script src="/js/chat.js" defer></script>
+</head>
+<body>
+
+<div class="app-shell">
+
+    <aside class="sidebar">
+
+        <header class="sidebar-header">
+            <div class="brand">
+                <div class="brand-logo">S</div>
+                <div>
+                    <h1>SajiloChat</h1>
+                    <p>Stay connected</p>
+                </div>
+            </div>
+
+            <button id="logoutButton" class="icon-button" title="Logout">
+                <span>↪</span>
+            </button>
+        </header>
+
+        <section class="profile-section">
+            <div class="avatar" id="myAvatar">U</div>
+            <div class="profile-info">
+                <strong id="myName">Loading...</strong>
+                <span id="connectionStatus">Connecting...</span>
+            </div>
+            <span class="online-dot"></span>
+        </section>
+
+        <div class="sidebar-actions">
+            <h2>Messages</h2>
+            <button id="newChatButton" class="new-chat-button">
+                + New chat
+            </button>
+        </div>
+
+        <div id="searchPanel" class="search-panel hidden">
+            <input
+                    type="search"
+                    id="userSearchInput"
+                    placeholder="Search username..."
+                    autocomplete="off"
+            >
+            <div id="userSearchResults" class="search-results"></div>
+        </div>
+
+        <div id="conversationList" class="conversation-list">
+            <div class="loading-state">Loading conversations...</div>
+        </div>
+
+    </aside>
+
+    <main class="chat-panel">
+
+        <section id="emptyState" class="empty-state">
+            <div class="empty-icon">S</div>
+            <h2>Welcome to SajiloChat</h2>
+            <p>Select a conversation or start a new chat.</p>
+            <button id="emptyNewChatButton" class="primary-button">
+                Start a conversation
+            </button>
+        </section>
+
+        <section id="activeChat" class="active-chat hidden">
+
+            <header class="chat-header">
+                <div class="avatar" id="chatAvatar">U</div>
+                <div class="chat-contact">
+                    <strong id="chatContactName">Contact</strong>
+                    <span id="chatContactStatus">Conversation</span>
+                </div>
+            </header>
+
+            <div id="messageList" class="message-list">
+                <div class="loading-state">Loading messages...</div>
+            </div>
+
+            <div id="typingIndicator" class="typing-indicator"></div>
+
+            <form id="messageForm" class="message-form">
+                <textarea
+                        id="messageInput"
+                        rows="1"
+                        maxlength="5000"
+                        placeholder="Write a message..."
+                        autocomplete="off"
+                        required
+                ></textarea>
+
+                <button id="sendButton" type="submit" title="Send message">
+                    ➤
+                </button>
+            </form>
+
+        </section>
+
+    </main>
+
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+</body>
+</html>

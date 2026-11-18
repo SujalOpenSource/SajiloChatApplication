@@ -1,0 +1,80 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account | SajiloChat</title>
+    <link rel="stylesheet" href="/css/auth.css">
+</head>
+<body>
+<main class="auth-container">
+    <section class="auth-card register-card">
+        <div class="brand-icon">S</div>
+
+        <h1>Create account</h1>
+        <p class="subtitle">Join SajiloChat and connect with people</p>
+
+        <form id="registerForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="firstName">First name</label>
+                    <input id="firstName" name="firstName"
+                           type="text" maxlength="50" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="lastName">Last name</label>
+                    <input id="lastName" name="lastName"
+                           type="text" maxlength="50" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input id="username" name="username"
+                       type="text" minlength="3" maxlength="30"
+                       pattern="[a-zA-Z0-9_]+" autocomplete="username" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email address</label>
+                <input id="email" name="email" type="email"
+                       maxlength="100" autocomplete="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phoneNumber">Phone number</label>
+                <input id="phoneNumber" name="phoneNumber"
+                       type="tel" placeholder="+977XXXXXXXXXX"
+                       pattern="\+?[1-9][0-9]{7,14}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="registerPassword">Password</label>
+                <input id="registerPassword" name="password"
+                       type="password" minlength="8" maxlength="72"
+                       autocomplete="new-password" required>
+            </div>
+
+            <p id="errorMessage" class="error-message" hidden></p>
+            <p id="successMessage" class="success-message" hidden></p>
+
+            <button type="submit" id="registerButton" class="primary-button">
+                Create account
+            </button>
+        </form>
+
+        <p class="auth-footer">
+            Already have an account?
+            <a href="/login.html">Login</a>
+        </p>
+    </section>
+</main>
+
+<script src="/js/auth.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", initializeRegisterPage);
+</script>
+</body>
+</html>

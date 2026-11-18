@@ -1,13 +1,12 @@
 
 package com.sajilochat.auth.service;
 
-import com.sajilochat.auth.dto.AuthResponse;
 import com.sajilochat.auth.dto.LoginRequest;
 import com.sajilochat.auth.dto.RegisterRequest;
 import com.sajilochat.common.exception.BadRequestException;
-import com.sajilochat.security.JwtService;
 import com.sajilochat.user.entity.User;
 import com.sajilochat.user.repository.UserRepository;
+import com.sajilochat.user.enums.UserStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,7 +23,6 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
 
     @Transactional
     public User register(RegisterRequest request) {
@@ -84,7 +82,7 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public AuthResponse login(LoginRequest request) {
+    public User authenticate(LoginRequest request) {
 
         String identifier = request.identifier()
                 .trim()
@@ -109,34 +107,13 @@ public class AuthService {
             );
         }
 
-        if (user.getStatus() !=
-                com.sajilochat.user.enums.UserStatus.ACTIVE) {
-
+        if (user.getStatus() != UserStatus.ACTIVE) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Your account is not active"
             );
         }
 
-        String accessToken = jwtService.generateToken(
-                new com.sajilochat.security.UserPrincipal(user)
-        );
-
-        AuthResponse.AuthenticatedUser authenticatedUser =
-                new AuthResponse.AuthenticatedUser(
-                        user.getId(),
-                        user.getUsername(),
-                        user.getFirstName(),
-                        user.getLastName(),
-                        user.getEmail(),
-                        user.getStatus()
-                );
-
-        return new AuthResponse(
-                "Bearer",
-                accessToken,
-                jwtService.getExpirationMs() / 1000,
-                authenticatedUser
-        );
+        return user;
     }
 }

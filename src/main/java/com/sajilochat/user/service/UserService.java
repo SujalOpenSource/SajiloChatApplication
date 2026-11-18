@@ -2,6 +2,7 @@
 package com.sajilochat.user.service;
 
 import com.sajilochat.block.repository.BlockRepository;
+import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
 import com.sajilochat.user.dto.UpdateProfileRequest;
 import com.sajilochat.user.dto.UserProfileResponse;
@@ -15,6 +16,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.net.URI;
 
 @Service
 @RequiredArgsConstructor
@@ -32,19 +35,19 @@ public class UserService {
     ) {
 
         if (query == null || query.trim().length() < 2) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "Search query must contain at least 2 characters"
             );
         }
 
         if (page < 0) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "Page number cannot be negative"
             );
         }
 
         if (size < 1 || size > 50) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "Page size must be between 1 and 50"
             );
         }
@@ -56,7 +59,10 @@ public class UserService {
                         PageRequest.of(
                                 page,
                                 size,
-                                Sort.by(Sort.Direction.ASC, "username")
+                                Sort.by(
+                                        Sort.Direction.ASC,
+                                        "username"
+                                )
                         )
                 )
                 .map(this::toUserResponse);
@@ -76,19 +82,42 @@ public class UserService {
             UpdateProfileRequest request
     ) {
 
+        if (request.firstName() == null
+                && request.lastName() == null
+                && request.bio() == null
+                && request.profilePictureUrl() == null) {
+
+            throw new BadRequestException(
+                    "At least one profile field must be provided"
+            );
+        }
+
         User user = findUserById(userId);
+
+        String firstName = normalizeName(
+                request.firstName(),
+                user.getFirstName(),
+                "First name"
+        );
+
+        String lastName = normalizeName(
+                request.lastName(),
+                user.getLastName(),
+                "Last name"
+        );
 
         String bio = request.bio() != null
                 ? request.bio().trim()
                 : user.getBio();
 
-        String profilePictureUrl = request.profilePictureUrl() != null
-                ? request.profilePictureUrl().trim()
-                : user.getProfilePictureUrl();
+        String profilePictureUrl = normalizeProfilePictureUrl(
+                request.profilePictureUrl(),
+                user.getProfilePictureUrl()
+        );
 
         user.updateProfile(
-                request.firstName().trim(),
-                request.lastName().trim(),
+                firstName,
+                lastName,
                 bio,
                 profilePictureUrl
         );
@@ -106,15 +135,91 @@ public class UserService {
 
         User user = findUserById(targetUserId);
 
-        if (!targetUserId.equals(currentUserId)
-                && isBlockedBetween(currentUserId, targetUserId)) {
+        // Allow users to access their own profile.
+        if (!targetUserId.equals(currentUserId)) {
 
-            // Do not reveal whether the target account exists
-            // when a block relationship prevents profile access.
-            throw new ResourceNotFoundException("User not found");
+            // Hide inactive and suspended accounts.
+            if (user.getStatus() != UserStatus.ACTIVE) {
+                throw new ResourceNotFoundException(
+                        "User not found"
+                );
+            }
+
+            // Hide profiles when either user has blocked the other.
+            if (isBlockedBetween(currentUserId, targetUserId)) {
+                throw new ResourceNotFoundException(
+                        "User not found"
+                );
+            }
         }
 
         return toUserResponse(user);
+    }
+
+    private String normalizeName(
+            String requestedName,
+            String existingName,
+            String fieldName
+    ) {
+
+        if (requestedName == null) {
+            return existingName;
+        }
+
+        String normalizedName = requestedName.trim();
+
+        if (normalizedName.isEmpty()) {
+            throw new BadRequestException(
+                    fieldName + " cannot be blank"
+            );
+        }
+
+        return normalizedName;
+    }
+
+    private String normalizeProfilePictureUrl(
+            String requestedUrl,
+            String existingUrl
+    ) {
+
+        if (requestedUrl == null) {
+            return existingUrl;
+        }
+
+        String normalizedUrl = requestedUrl.trim();
+
+        // An empty value removes the profile picture.
+        if (normalizedUrl.isEmpty()) {
+            return null;
+        }
+
+        try {
+
+            URI uri = URI.create(normalizedUrl);
+            String scheme = uri.getScheme();
+
+            boolean validScheme = scheme != null
+                    && (scheme.equalsIgnoreCase("http")
+                    || scheme.equalsIgnoreCase("https"));
+
+            if (!uri.isAbsolute()
+                    || !validScheme
+                    || uri.getHost() == null
+                    || uri.getUserInfo() != null) {
+
+                throw new BadRequestException(
+                        "Profile picture URL must be a valid HTTP or HTTPS URL"
+                );
+            }
+
+            return normalizedUrl;
+
+        } catch (IllegalArgumentException exception) {
+
+            throw new BadRequestException(
+                    "Profile picture URL is invalid"
+            );
+        }
     }
 
     private boolean isBlockedBetween(
@@ -141,7 +246,9 @@ public class UserService {
 
         return userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
+                        new ResourceNotFoundException(
+                                "User not found"
+                        )
                 );
     }
 

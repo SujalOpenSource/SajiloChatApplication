@@ -11,6 +11,7 @@ import com.sajilochat.message.repository.MessageRepository;
 import com.sajilochat.messagestatus.dto.MessageStatusEvent;
 import com.sajilochat.messagestatus.dto.MessageStatusResponse;
 import com.sajilochat.messagestatus.entity.MessageStatus;
+import com.sajilochat.messagestatus.enums.DeliveryStatus;
 import com.sajilochat.messagestatus.event.MessageStatusDeliveryEvent;
 import com.sajilochat.messagestatus.repository.MessageStatusRepository;
 import com.sajilochat.user.entity.User;
@@ -72,7 +73,7 @@ public class MessageStatusService {
             Long currentUserId
     ) {
 
-        MessageStatus status = findRecipientStatus(
+        MessageStatus status = findRecipientStatusForUpdate(
                 messageId,
                 currentUserId
         );
@@ -82,9 +83,13 @@ public class MessageStatusService {
                 currentUserId
         );
 
+        DeliveryStatus previousStatus = status.getStatus();
+
         status.markAsDelivered();
 
-        publishStatusUpdate(status);
+        if (status.getStatus() != previousStatus) {
+            publishStatusUpdate(status);
+        }
 
         return mapToResponse(status);
     }
@@ -95,7 +100,7 @@ public class MessageStatusService {
             Long currentUserId
     ) {
 
-        MessageStatus status = findRecipientStatus(
+        MessageStatus status = findRecipientStatusForUpdate(
                 messageId,
                 currentUserId
         );
@@ -105,9 +110,13 @@ public class MessageStatusService {
                 currentUserId
         );
 
+        DeliveryStatus previousStatus = status.getStatus();
+
         status.markAsRead();
 
-        publishStatusUpdate(status);
+        if (status.getStatus() != previousStatus) {
+            publishStatusUpdate(status);
+        }
 
         return mapToResponse(status);
     }
@@ -174,13 +183,16 @@ public class MessageStatusService {
         }
     }
 
-    private MessageStatus findRecipientStatus(
+    private MessageStatus findRecipientStatusForUpdate(
             Long messageId,
             Long currentUserId
     ) {
 
         return messageStatusRepository
-                .findByMessageIdAndRecipientId(messageId, currentUserId)
+                .findByMessageIdAndRecipientIdForUpdate(
+                        messageId,
+                        currentUserId
+                )
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Message status not found"

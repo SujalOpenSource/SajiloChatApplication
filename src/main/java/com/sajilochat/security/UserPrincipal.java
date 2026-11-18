@@ -2,6 +2,7 @@
 package com.sajilochat.security;
 
 import com.sajilochat.user.entity.User;
+import com.sajilochat.user.enums.UserStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -17,6 +18,22 @@ public class UserPrincipal implements UserDetails {
 
     public Long getUserId() {
         return user.getId();
+    }
+
+    public String getFirstName() {
+        return user.getFirstName();
+    }
+
+    public String getLastName() {
+        return user.getLastName();
+    }
+
+    public String getEmail() {
+        return user.getEmail();
+    }
+
+    public UserStatus getStatus() {
+        return user.getStatus();
     }
 
     @Override
@@ -51,7 +68,6 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return user.getStatus() != null
-                && user.getStatus().name().equals("ACTIVE");
+        return user.getStatus() == UserStatus.ACTIVE;
     }
 }

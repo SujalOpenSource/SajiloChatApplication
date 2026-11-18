@@ -2,7 +2,6 @@
 package com.sajilochat.config;
 
 import com.sajilochat.security.ConversationAuthorizationInterceptor;
-import com.sajilochat.security.JwtChannelInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -17,8 +16,11 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final JwtChannelInterceptor jwtChannelInterceptor;
-    private final ConversationAuthorizationInterceptor conversationAuthorizationInterceptor;
+    private final ConversationAuthorizationInterceptor
+            conversationAuthorizationInterceptor;
+
+    private final SessionPrincipalHandshakeHandler
+            sessionPrincipalHandshakeHandler;
 
     @Value("${app.websocket.allowed-origins:http://localhost:8080,http://127.0.0.1:8080}")
     private String[] allowedOrigins;
@@ -37,6 +39,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
 
         registry.addEndpoint("/ws")
+                .setHandshakeHandler(sessionPrincipalHandshakeHandler)
                 .setAllowedOrigins(allowedOrigins);
     }
 
@@ -44,8 +47,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void configureClientInboundChannel(
             ChannelRegistration registration
     ) {
+
         registration.interceptors(
-                jwtChannelInterceptor,
                 conversationAuthorizationInterceptor
         );
     }
