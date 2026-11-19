@@ -195,6 +195,7 @@ public class MessageService {
                 );
     }
 
+
     private MessageResponse mapToResponse(Message message) {
         User sender = message.getSender();
 
@@ -205,7 +206,8 @@ public class MessageService {
                         sender.getId(),
                         sender.getUsername(),
                         sender.getFirstName(),
-                        sender.getLastName()
+                        sender.getLastName(),
+                        sender.getProfilePictureUrl()
                 ),
                 message.getType(),
                 message.getContent(),
@@ -214,4 +216,5 @@ public class MessageService {
                 message.getUpdatedAt()
         );
     }
+
 }

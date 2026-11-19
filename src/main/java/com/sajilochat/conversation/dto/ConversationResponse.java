@@ -16,11 +16,14 @@ public record ConversationResponse(
         Instant updatedAt,
         Instant lastMessageAt
 ) {
+
     public record MemberResponse(
             Long userId,
             String username,
             String firstName,
             String lastName,
+            String profilePictureUrl,
             Instant joinedAt
-    ) {}
+    ) {
+    }
 }

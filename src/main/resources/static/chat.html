@@ -33,11 +33,40 @@
         </header>
 
         <section class="profile-section">
-            <div class="avatar" id="myAvatar">U</div>
+            <div class="profile-avatar-container">
+                <div class="avatar" id="myAvatar">U</div>
+
+                <button
+                        type="button"
+                        id="changeProfilePictureButton"
+                        class="avatar-edit-button"
+                        title="Change profile picture"
+                        aria-label="Change profile picture">
+                    ✎
+                </button>
+
+                <input
+                        type="file"
+                        id="profilePictureInput"
+                        accept="image/jpeg,image/png,image/webp"
+                        hidden
+                >
+            </div>
+
             <div class="profile-info">
                 <strong id="myName">Loading...</strong>
                 <span id="connectionStatus">Connecting...</span>
+
+                <div class="profile-picture-actions">
+                    <button
+                            type="button"
+                            id="removeProfilePictureButton"
+                            class="remove-picture-button hidden">
+                        Remove photo
+                    </button>
+                </div>
             </div>
+
             <span class="online-dot"></span>
         </section>
 

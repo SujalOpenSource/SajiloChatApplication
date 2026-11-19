@@ -702,6 +702,7 @@ public class GroupService {
         );
     }
 
+
     private GroupResponse.GroupMemberResponse mapMemberToResponse(
             ConversationMember member
     ) {
@@ -713,8 +714,10 @@ public class GroupService {
                 user.getUsername(),
                 user.getFirstName(),
                 user.getLastName(),
+                user.getProfilePictureUrl(),
                 member.getGroupRole(),
                 member.getJoinedAt()
         );
     }
+
 }

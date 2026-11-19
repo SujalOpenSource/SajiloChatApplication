@@ -34,6 +34,10 @@ import java.time.Instant;
 )
 public class User {
 
+    public void updateProfilePictureUrl(String profilePictureUrl) {
+        this.profilePictureUrl = profilePictureUrl;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

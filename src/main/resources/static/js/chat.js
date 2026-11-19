@@ -17,6 +17,8 @@ const state = {
 
 document.addEventListener("DOMContentLoaded", initializeChat);
 
+/* Initialize */
+
 async function initializeChat() {
     bindEvents();
 
@@ -25,12 +27,20 @@ async function initializeChat() {
 
         const currentUserResponse = await apiRequest("/auth/me");
 
-        state.currentUser =
+        const authenticatedUser =
             currentUserResponse.user ?? currentUserResponse;
 
-        if (!state.currentUser || state.currentUser.id == null) {
+        if (!authenticatedUser || authenticatedUser.id == null) {
             throw new Error("Could not identify the authenticated user.");
         }
+
+        // Load the complete profile, including the profile picture URL.
+        const profileResponse = await apiRequest("/users/me");
+
+        state.currentUser = {
+            ...authenticatedUser,
+            ...profileResponse
+        };
 
         renderCurrentUser(state.currentUser);
 
@@ -78,6 +88,18 @@ function bindEvents() {
 
     document.getElementById("logoutButton")
         .addEventListener("click", logout);
+
+    // Profile picture events.
+    document.getElementById("changeProfilePictureButton")
+        .addEventListener("click", () => {
+            document.getElementById("profilePictureInput").click();
+        });
+
+    document.getElementById("profilePictureInput")
+        .addEventListener("change", handleProfilePictureUpload);
+
+    document.getElementById("removeProfilePictureButton")
+        .addEventListener("click", handleProfilePictureRemoval);
 }
 
 /* CSRF */
@@ -135,7 +157,15 @@ async function apiRequest(path, options = {}) {
         ...(options.headers || {})
     };
 
-    if (options.body && !headers["Content-Type"]) {
+    // Do not manually set Content-Type for FormData.
+    // The browser must generate the multipart boundary.
+    const isFormData = options.body instanceof FormData;
+
+    if (
+        options.body &&
+        !isFormData &&
+        !headers["Content-Type"]
+    ) {
         headers["Content-Type"] = "application/json";
     }
 
@@ -199,8 +229,144 @@ function renderCurrentUser(user) {
 
     document.getElementById("myName").textContent = fullName;
 
-    document.getElementById("myAvatar").textContent =
-        getInitials(fullName);
+    setAvatar(
+        document.getElementById("myAvatar"),
+        user.profilePictureUrl,
+        fullName
+    );
+
+    document.getElementById("removeProfilePictureButton")
+        .classList.toggle("hidden", !user.profilePictureUrl);
+}
+
+/* Profile pictures */
+
+function setAvatar(element, pictureUrl, fallbackName) {
+    element.replaceChildren();
+
+    if (!pictureUrl) {
+        element.textContent = getInitials(fallbackName);
+        return;
+    }
+
+    const image = document.createElement("img");
+
+    image.className = "avatar-image";
+    image.src = pictureUrl;
+    image.alt = `${fallbackName || "User"} profile picture`;
+
+    image.onerror = () => {
+        element.replaceChildren();
+        element.textContent = getInitials(fallbackName);
+    };
+
+    element.appendChild(image);
+}
+
+async function handleProfilePictureUpload(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+
+    if (!file) {
+        return;
+    }
+
+    const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+        showToast("Please select a JPEG, PNG, or WebP image.");
+        input.value = "";
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        showToast("Profile picture must be smaller than 5 MB.");
+        input.value = "";
+        return;
+    }
+
+    const button = document.getElementById(
+        "changeProfilePictureButton"
+    );
+
+    button.disabled = true;
+
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await apiRequest(
+            "/users/me/profile-picture",
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        state.currentUser.profilePictureUrl =
+            response.profilePictureUrl;
+
+        renderCurrentUser(state.currentUser);
+
+        showToast("Profile picture updated successfully.");
+
+    } catch (error) {
+        console.error("Profile picture upload failed:", error);
+
+        showToast(
+            error.message || "Could not upload profile picture."
+        );
+
+    } finally {
+        button.disabled = false;
+        input.value = "";
+    }
+}
+
+async function handleProfilePictureRemoval() {
+    if (!state.currentUser?.profilePictureUrl) {
+        return;
+    }
+
+    const confirmed = window.confirm(
+        "Are you sure you want to remove your profile picture?"
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const button = document.getElementById(
+        "removeProfilePictureButton"
+    );
+
+    button.disabled = true;
+
+    try {
+        await apiRequest("/users/me/profile-picture", {
+            method: "DELETE"
+        });
+
+        state.currentUser.profilePictureUrl = null;
+
+        renderCurrentUser(state.currentUser);
+
+        showToast("Profile picture removed successfully.");
+
+    } catch (error) {
+        console.error("Profile picture removal failed:", error);
+
+        showToast(
+            error.message || "Could not remove profile picture."
+        );
+
+    } finally {
+        button.disabled = false;
+    }
 }
 
 /* Conversations */
@@ -490,6 +656,7 @@ async function handleSendMessage(event) {
 
 /* Render messages */
 
+
 function renderMessage(message) {
     if (
         message.id != null &&
@@ -505,9 +672,11 @@ function renderMessage(message) {
     const container = document.getElementById("messageList");
     const row = document.createElement("div");
 
+    const sender = message.sender || {};
+
     const senderId =
-        message.sender?.id ??
-        message.sender?.userId ??
+        sender.id ??
+        sender.userId ??
         message.senderId;
 
     const currentUserId = state.currentUser?.id;
@@ -517,10 +686,26 @@ function renderMessage(message) {
         currentUserId != null &&
         Number(senderId) === Number(currentUserId);
 
+    const senderName =
+        [sender.firstName, sender.lastName]
+            .filter(Boolean)
+            .join(" ") || sender.username || "User";
+
     row.className = isOwnMessage
         ? "message-row own"
         : "message-row";
 
+    // Sender avatar
+    const avatar = document.createElement("div");
+    avatar.className = "avatar message-avatar";
+
+    setAvatar(
+        avatar,
+        sender.profilePictureUrl,
+        senderName
+    );
+
+    // Message bubble
     const bubble = document.createElement("div");
     bubble.className = "message-bubble";
 
@@ -541,9 +726,18 @@ function renderMessage(message) {
     meta.textContent = time + (message.edited ? " · edited" : "");
 
     bubble.append(content, meta);
-    row.appendChild(bubble);
+
+    // Received messages: avatar first.
+    // Own messages: bubble first.
+    if (isOwnMessage) {
+        row.append(bubble, avatar);
+    } else {
+        row.append(avatar, bubble);
+    }
+
     container.appendChild(row);
 }
+
 
 function scrollMessagesToBottom() {
     const container = document.getElementById("messageList");

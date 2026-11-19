@@ -34,6 +34,8 @@ public record GroupResponse(
 
             String lastName,
 
+            String profilePictureUrl,
+
             GroupRole role,
 
             Instant joinedAt

@@ -177,6 +177,7 @@ public class ConversationService {
         );
     }
 
+
     private ConversationResponse.MemberResponse mapMember(
             ConversationMember member
     ) {
@@ -187,7 +188,9 @@ public class ConversationService {
                 user.getUsername(),
                 user.getFirstName(),
                 user.getLastName(),
+                user.getProfilePictureUrl(),
                 member.getJoinedAt()
         );
     }
+
 }

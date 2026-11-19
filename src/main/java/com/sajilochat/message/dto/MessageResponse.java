@@ -15,10 +15,13 @@ public record MessageResponse(
         Instant createdAt,
         Instant updatedAt
 ) {
+
     public record SenderResponse(
             Long id,
             String username,
             String firstName,
-            String lastName
-    ) {}
+            String lastName,
+            String profilePictureUrl
+    ) {
+    }
 }
