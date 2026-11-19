@@ -2,6 +2,7 @@
 package com.sajilochat.notification.repository;
 
 import com.sajilochat.notification.entity.Notification;
+import com.sajilochat.notification.enums.NotificationType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,6 +32,12 @@ public interface NotificationRepository
     );
 
     long countByRecipientIdAndReadAtIsNull(Long recipientId);
+
+    long countByRecipientIdAndConversationIdAndTypeAndReadAtIsNull(
+            Long recipientId,
+            Long conversationId,
+            NotificationType type
+    );
 
     @Modifying(
             flushAutomatically = true,

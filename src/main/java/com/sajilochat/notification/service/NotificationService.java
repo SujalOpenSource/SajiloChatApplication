@@ -4,6 +4,7 @@ package com.sajilochat.notification.service;
 import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
 import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.message.entity.Message;
 import com.sajilochat.notification.dto.NotificationResponse;
 import com.sajilochat.notification.entity.Notification;
@@ -22,12 +23,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-
+import com.sajilochat.notification.enums.NotificationType;
 @Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NotificationService {
+
+    private static final int MAX_NOTIFICATION_CONTENT_LENGTH = 500;
 
     private final NotificationRepository notificationRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -35,8 +38,10 @@ public class NotificationService {
     @Transactional
     public void createNewMessageNotifications(Message message) {
 
-        var conversation = message.getConversation();
+        Conversation conversation = message.getConversation();
         User sender = message.getSender();
+
+        String preview = createMessagePreview(message);
 
         for (var member : conversation.getMembers()) {
 
@@ -52,7 +57,7 @@ public class NotificationService {
                     NotificationType.NEW_MESSAGE,
                     conversation,
                     message,
-                    sender.getUsername() + " sent you a message"
+                    preview
             );
 
             saveAndPublish(notification, recipient);
@@ -199,6 +204,33 @@ public class NotificationService {
     ) {
 
         User actor = notification.getActor();
+        Conversation conversation = notification.getConversation();
+
+        Long conversationId = conversation != null
+                ? conversation.getId()
+                : null;
+
+        ConversationType conversationType = conversation != null
+                ? conversation.getType()
+                : null;
+
+        String conversationName = conversation != null
+                ? conversation.getName()
+                : null;
+
+        long groupUnreadCount = 0;
+
+        if (conversation != null
+                && conversation.getType() == ConversationType.GROUP) {
+
+            groupUnreadCount =
+                    notificationRepository
+                            .countByRecipientIdAndConversationIdAndTypeAndReadAtIsNull(
+                                    notification.getRecipient().getId(),
+                                    conversation.getId(),
+                                    NotificationType.NEW_MESSAGE
+                            );
+        }
 
         return new NotificationResponse(
                 notification.getId(),
@@ -206,16 +238,38 @@ public class NotificationService {
                 actor != null ? actor.getId() : null,
                 actor != null ? actor.getUsername() : null,
                 notification.getType(),
-                notification.getConversation() != null
-                        ? notification.getConversation().getId()
-                        : null,
+                conversationId,
+                conversationType,
+                conversationName,
                 notification.getMessage() != null
                         ? notification.getMessage().getId()
                         : null,
                 notification.getContent(),
                 notification.getCreatedAt(),
                 notification.getReadAt(),
-                notification.isRead()
+                notification.isRead(),
+                groupUnreadCount
         );
+    }
+
+    private String createMessagePreview(Message message) {
+
+        String content = message.getContent();
+
+        if (content == null || content.isBlank()) {
+            return "Sent a message";
+        }
+
+        String normalizedContent = content.trim();
+
+        if (normalizedContent.length()
+                <= MAX_NOTIFICATION_CONTENT_LENGTH) {
+            return normalizedContent;
+        }
+
+        return normalizedContent.substring(
+                0,
+                MAX_NOTIFICATION_CONTENT_LENGTH - 3
+        ) + "...";
     }
 }

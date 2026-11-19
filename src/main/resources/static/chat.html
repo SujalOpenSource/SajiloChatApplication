@@ -14,6 +14,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js" defer></script>
     <script src="/js/chat.js" defer></script>
+    <script src="/js/message-actions.js"></script>
+    <script src ="/js/group-management.js"></script>
 </head>
 
 <body>
@@ -24,6 +26,7 @@
     <aside class="sidebar">
 
         <header class="sidebar-header">
+
             <div class="brand">
                 <div class="brand-logo">S</div>
 
@@ -33,20 +36,81 @@
                 </div>
             </div>
 
-            <button
-                    id="logoutButton"
-                    class="icon-button"
-                    type="button"
-                    title="Logout"
-                    aria-label="Logout">
-                <span>↪</span>
-            </button>
+            <!-- Header Actions -->
+            <div class="header-actions">
+
+                <!-- Notification Bell -->
+                <div class="notification-container">
+
+                    <button
+                            type="button"
+                            id="notificationButton"
+                            class="icon-button notification-button"
+                            title="Notifications"
+                            aria-label="Notifications"
+                            aria-expanded="false"
+                            aria-controls="notificationDropdown">
+
+                        <span aria-hidden="true">♢</span>
+
+                        <span
+                                id="notificationBadge"
+                                class="notification-badge hidden">
+                            0
+                        </span>
+
+                    </button>
+
+                    <!-- Notification Dropdown -->
+                    <div
+                            id="notificationDropdown"
+                            class="notification-dropdown hidden">
+
+                        <div class="notification-dropdown-header">
+
+                            <h2>Notifications</h2>
+
+                            <button
+                                    type="button"
+                                    id="markAllNotificationsReadButton">
+                                Mark all as read
+                            </button>
+
+                        </div>
+
+                        <div
+                                id="notificationList"
+                                class="notification-list">
+
+                            <div class="notification-empty">
+                                No notifications yet.
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Logout -->
+                <button
+                        id="logoutButton"
+                        class="icon-button"
+                        type="button"
+                        title="Logout"
+                        aria-label="Logout">
+                    <span>↪</span>
+                </button>
+
+            </div>
+
         </header>
 
         <!-- Current User Profile -->
         <section class="profile-section">
 
             <div class="profile-avatar-container">
+
                 <div class="avatar" id="myAvatar">U</div>
 
                 <button
@@ -64,6 +128,7 @@
                         accept="image/jpeg,image/png,image/webp"
                         hidden
                 >
+
             </div>
 
             <div class="profile-info">
@@ -104,6 +169,7 @@
 
         <!-- Sidebar Actions -->
         <div class="sidebar-actions">
+
             <h2>Messages</h2>
 
             <div class="chat-action-buttons">
@@ -123,6 +189,7 @@
                 </button>
 
             </div>
+
         </div>
 
         <!-- Private User Search -->
@@ -141,7 +208,11 @@
 
         <!-- Conversations -->
         <div id="conversationList" class="conversation-list">
-            <div class="loading-state">Loading conversations...</div>
+
+            <div class="loading-state">
+                Loading conversations...
+            </div>
+
         </div>
 
     </aside>
@@ -191,9 +262,14 @@
 
             <!-- Messages -->
             <div id="messageList" class="message-list">
-                <div class="loading-state">Loading messages...</div>
+
+                <div class="loading-state">
+                    Loading messages...
+                </div>
+
             </div>
 
+            <!-- Typing Indicator -->
             <div id="typingIndicator" class="typing-indicator"></div>
 
             <!-- Message Form -->
@@ -233,12 +309,14 @@
     <form id="editProfileForm" class="profile-dialog-form">
 
         <div class="profile-dialog-header">
+
             <div>
                 <h2>Edit your profile</h2>
                 <p>Personalize your SajiloChat profile.</p>
             </div>
 
             <span class="profile-dialog-icon">✎</span>
+
         </div>
 
         <label for="editFirstName">First name</label>
@@ -302,12 +380,14 @@
     <form id="createGroupForm" class="group-dialog-form">
 
         <div class="group-dialog-header">
+
             <div>
                 <h2>Create a group</h2>
                 <p>Bring your friends together on SajiloChat.</p>
             </div>
 
             <span class="group-dialog-icon">👥</span>
+
         </div>
 
         <!-- Group Name -->
@@ -382,12 +462,14 @@
     <form id="addGroupMembersForm" class="group-dialog-form">
 
         <div class="group-dialog-header">
+
             <div>
                 <h2>Add group members</h2>
                 <p>Invite more people to this conversation.</p>
             </div>
 
             <span class="group-dialog-icon">👥</span>
+
         </div>
 
         <!-- Member Search -->

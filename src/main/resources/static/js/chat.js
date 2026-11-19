@@ -1,4 +1,3 @@
-
 "use strict";
 
 const API_BASE = "/api/v1";
@@ -29,7 +28,13 @@ const state = {
     typingSubscription: null,
     typingStopTimeout: null,
     localTypingActive: false,
-    remoteTypingUsers: new Map()
+    remoteTypingUsers: new Map(),
+
+    // In-app notifications
+    notificationSubscription: null,
+    notifications: [],
+    unreadNotificationCount: 0,
+    notificationLoading: false
 };
 
 document.addEventListener("DOMContentLoaded", initializeChat);
@@ -63,6 +68,12 @@ async function initializeChat() {
         renderCurrentUser(state.currentUser);
 
         await loadConversations();
+
+        // Notification failures must not prevent the chat application from loading.
+        await Promise.all([
+            loadNotifications(),
+            loadUnreadNotificationCount()
+        ]);
 
         connectWebSocket();
 
@@ -119,6 +130,21 @@ function bindEvents() {
 
     document.getElementById("logoutButton")
         .addEventListener("click", logout);
+
+    // In-app notification events.
+    document.getElementById("notificationButton")
+        ?.addEventListener("click", toggleNotificationDropdown);
+
+    document.getElementById("markAllNotificationsReadButton")
+        ?.addEventListener("click", markAllNotificationsAsRead);
+
+    document.addEventListener("click", event => {
+        const container = document.getElementById("notificationContainer");
+
+        if (container && !container.contains(event.target)) {
+            closeNotificationDropdown();
+        }
+    });
 
     // Profile picture events.
     document.getElementById("changeProfilePictureButton")
@@ -778,6 +804,8 @@ function connectWebSocket() {
 
         onConnect: () => {
             setConnectionStatus("Connected");
+
+            subscribeToNotifications();
 
             if (state.activeConversationId) {
                 subscribeToConversation(state.activeConversationId);
@@ -2030,9 +2058,722 @@ async function handleAddGroupMembers(event) {
     }
 }
 
+
 /* =========================================
-   LOGOUT
+   IN-APP NOTIFICATIONS
 ========================================= */
+
+async function loadNotifications() {
+    if (state.notificationLoading) {
+        return;
+    }
+
+    state.notificationLoading = true;
+
+    try {
+        const response = await apiRequest("/notifications?page=0&size=20");
+
+        const notifications = Array.isArray(response)
+            ? response
+            : response?.content || response?.items || [];
+
+        state.notifications = notifications.slice(0, 20);
+
+        renderNotifications();
+
+    } catch (error) {
+        console.error("Could not load notifications:", error);
+    } finally {
+        state.notificationLoading = false;
+    }
+}
+
+async function loadUnreadNotificationCount() {
+    try {
+        const response = await apiRequest("/notifications/unread/count");
+
+        updateUnreadNotificationCount(
+            Number(response?.unreadCount ?? response?.count ?? 0)
+        );
+
+    } catch (error) {
+        console.error("Could not load unread notification count:", error);
+    }
+}
+
+function updateUnreadNotificationCount(count) {
+    const normalizedCount = Number.isFinite(Number(count))
+        ? Math.max(0, Number(count))
+        : 0;
+
+    state.unreadNotificationCount = normalizedCount;
+
+    const badge = document.getElementById("notificationBadge");
+
+    const markAllButton = document.getElementById(
+        "markAllNotificationsReadButton"
+    );
+
+    if (badge) {
+        badge.textContent = normalizedCount > 99
+            ? "99+"
+            : String(normalizedCount);
+
+        badge.classList.toggle("hidden", normalizedCount === 0);
+
+        badge.setAttribute(
+            "aria-label",
+            `${normalizedCount} unread notification${normalizedCount === 1 ? "" : "s"}`
+        );
+    }
+
+    if (markAllButton) {
+        markAllButton.disabled = normalizedCount === 0;
+    }
+}
+
+function subscribeToNotifications() {
+    if (!state.stompClient || !state.stompClient.connected) {
+        return;
+    }
+
+    if (state.notificationSubscription) {
+        state.notificationSubscription.unsubscribe();
+        state.notificationSubscription = null;
+    }
+
+    state.notificationSubscription = state.stompClient.subscribe(
+        "/user/queue/notifications",
+        frame => {
+            try {
+                const notification = JSON.parse(frame.body);
+
+                handleIncomingNotification(notification);
+
+            } catch (error) {
+                console.error(
+                    "Could not process incoming notification:",
+                    error
+                );
+            }
+        }
+    );
+}
+
+function handleIncomingNotification(notification) {
+    if (!notification || notification.id == null) {
+        console.warn("Received an invalid notification:", notification);
+        return;
+    }
+
+    const alreadyExists = state.notifications.some(
+        item => String(item.id) === String(notification.id)
+    );
+
+    if (alreadyExists) {
+        return;
+    }
+
+    state.notifications.unshift(notification);
+
+    state.notifications = state.notifications.slice(0, 20);
+
+    if (!notification.read) {
+        updateUnreadNotificationCount(
+            state.unreadNotificationCount + 1
+        );
+    }
+
+    renderNotifications();
+
+    const actor = notification.actorUsername || "Someone";
+
+    const conversationName =
+        notification.conversationName || "a conversation";
+
+    if (
+        notification.type === "NEW_MESSAGE" &&
+        notification.conversationType === "GROUP"
+    ) {
+        showToast(`${actor} sent a message in ${conversationName}.`);
+    } else {
+        showToast(`${actor} sent you a new message.`);
+    }
+}
+
+function toggleNotificationDropdown() {
+    const dropdown = document.getElementById("notificationDropdown");
+
+    const button = document.getElementById("notificationButton");
+
+    if (!dropdown) {
+        return;
+    }
+
+    const willOpen = dropdown.classList.contains("hidden");
+
+    dropdown.classList.toggle("hidden", !willOpen);
+
+    button?.setAttribute("aria-expanded", String(willOpen));
+
+    if (willOpen) {
+        loadNotifications();
+    }
+}
+
+function closeNotificationDropdown() {
+    const dropdown = document.getElementById("notificationDropdown");
+
+    const button = document.getElementById("notificationButton");
+
+    dropdown?.classList.add("hidden");
+
+    button?.setAttribute("aria-expanded", "false");
+}
+
+/*
+ * Group messages belonging to the same group conversation.
+ *
+ * Private messages remain individual notifications.
+ * Other notification types remain individual notifications.
+ */
+function getGroupedNotifications() {
+    const groupedItems = [];
+
+    const groupMap = new Map();
+
+    state.notifications.forEach(notification => {
+        const isGroupMessage =
+            notification.type === "NEW_MESSAGE" &&
+            notification.conversationType === "GROUP" &&
+            notification.conversationId != null;
+
+        if (!isGroupMessage) {
+            groupedItems.push({
+                type: "single",
+                notification
+            });
+
+            return;
+        }
+
+        const conversationId = String(notification.conversationId);
+
+        if (!groupMap.has(conversationId)) {
+            const groupItem = {
+                type: "group",
+                conversationId: notification.conversationId,
+                conversationName:
+                    notification.conversationName || "Group conversation",
+                notifications: [],
+                latestNotification: notification
+            };
+
+            groupMap.set(conversationId, groupItem);
+
+            groupedItems.push(groupItem);
+        }
+
+        const groupItem = groupMap.get(conversationId);
+
+        groupItem.notifications.push(notification);
+
+        if (
+            new Date(notification.createdAt || 0).getTime() >
+            new Date(groupItem.latestNotification.createdAt || 0).getTime()
+        ) {
+            groupItem.latestNotification = notification;
+        }
+
+        if (notification.conversationName) {
+            groupItem.conversationName = notification.conversationName;
+        }
+    });
+
+    return groupedItems;
+}
+
+function renderNotifications() {
+    const container = document.getElementById("notificationList");
+
+    if (!container) {
+        return;
+    }
+
+    container.replaceChildren();
+
+    if (state.notifications.length === 0) {
+        const empty = document.createElement("div");
+
+        empty.className = "notification-empty";
+
+        empty.textContent = state.notificationLoading
+            ? "Loading notifications..."
+            : "You're all caught up.";
+
+        container.appendChild(empty);
+
+        return;
+    }
+
+    const groupedItems = getGroupedNotifications();
+
+    groupedItems.forEach(groupItem => {
+        if (groupItem.type === "group") {
+            renderGroupNotification(groupItem, container);
+        } else {
+            renderSingleNotification(
+                groupItem.notification,
+                container
+            );
+        }
+    });
+}
+
+/*
+ * Render one group notification.
+ *
+ * Example:
+ *
+ * Hardware Team
+ * Rahul: Please check the new message.
+ *                         (2)  •
+ */
+function renderGroupNotification(groupItem, container) {
+    const item = document.createElement("button");
+
+    item.type = "button";
+    item.className = "notification-item group-notification-item";
+
+    const notifications = groupItem.notifications;
+
+    const latestNotification = groupItem.latestNotification;
+
+    const unreadNotifications = notifications.filter(
+        notification => !notification.read
+    );
+
+    const serverUnreadCount = Number(
+        latestNotification.groupUnreadCount ?? 0
+    );
+
+    const unreadCount = Math.max(
+        0,
+        serverUnreadCount,
+        unreadNotifications.length
+    );
+
+    const isUnread = unreadCount > 0;
+
+    if (isUnread) {
+        item.classList.add("unread");
+    }
+
+    const avatar = document.createElement("div");
+
+    avatar.className = "notification-avatar group-notification-avatar";
+
+    avatar.textContent = getInitials(groupItem.conversationName);
+
+    const details = document.createElement("div");
+
+    details.className = "notification-details";
+
+    const title = document.createElement("strong");
+
+    title.className = "notification-group-name";
+
+    title.textContent = groupItem.conversationName;
+
+    const message = document.createElement("span");
+
+    message.className = "notification-message";
+
+    const sender =
+        latestNotification.actorUsername || "Someone";
+
+    const preview =
+        latestNotification.content || "Sent a message.";
+
+    message.textContent = `${sender}: ${preview}`;
+
+    const time = document.createElement("small");
+
+    time.className = "notification-time";
+
+    time.textContent = formatNotificationTime(
+        latestNotification.createdAt
+    );
+
+    details.append(title, message, time);
+
+    const status = document.createElement("div");
+
+    status.className = "notification-status";
+
+    if (isUnread) {
+        const count = document.createElement("span");
+
+        count.className = "notification-group-count";
+
+        count.textContent = unreadCount > 99
+            ? "99+"
+            : String(unreadCount);
+
+        count.setAttribute(
+            "aria-label",
+            `${unreadCount} unread messages`
+        );
+
+        status.appendChild(count);
+    }
+
+    const unreadDot = document.createElement("span");
+
+    unreadDot.className = "notification-unread-dot";
+
+    unreadDot.setAttribute("aria-hidden", "true");
+
+    unreadDot.classList.toggle("hidden", !isUnread);
+
+    status.appendChild(unreadDot);
+
+    item.append(avatar, details, status);
+
+    item.addEventListener("click", () => {
+        openGroupNotification(groupItem);
+    });
+
+    container.appendChild(item);
+}
+
+/*
+ * Render an individual notification.
+ *
+ * Used for private messages and other notification types.
+ */
+function renderSingleNotification(notification, container) {
+    const item = document.createElement("button");
+
+    item.type = "button";
+
+    item.className = "notification-item";
+
+    if (!notification.read) {
+        item.classList.add("unread");
+    }
+
+    const avatar = document.createElement("div");
+
+    avatar.className = "notification-avatar";
+
+    avatar.textContent = getInitials(
+        notification.actorUsername || "U"
+    );
+
+    const details = document.createElement("div");
+
+    details.className = "notification-details";
+
+    const message = document.createElement("span");
+
+    message.className = "notification-message";
+
+    const actor = notification.actorUsername || "Someone";
+
+    if (notification.type === "NEW_MESSAGE") {
+        message.textContent = notification.content
+            ? `${actor}: ${notification.content}`
+            : `${actor} sent you a message.`;
+    } else {
+        message.textContent = notification.content
+            || `${actor} sent you a notification.`;
+    }
+
+    const time = document.createElement("small");
+
+    time.className = "notification-time";
+
+    time.textContent = formatNotificationTime(
+        notification.createdAt
+    );
+
+    details.append(message, time);
+
+    const unreadDot = document.createElement("span");
+
+    unreadDot.className = "notification-unread-dot";
+
+    unreadDot.setAttribute("aria-hidden", "true");
+
+    unreadDot.classList.toggle("hidden", Boolean(notification.read));
+
+    item.append(avatar, details, unreadDot);
+
+    item.addEventListener("click", () => {
+        openNotification(notification);
+    });
+
+    container.appendChild(item);
+}
+
+function formatNotificationTime(value) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    const now = new Date();
+
+    const difference = Math.max(
+        0,
+        now.getTime() - date.getTime()
+    );
+
+    const minutes = Math.floor(difference / 60000);
+
+    if (minutes < 1) {
+        return "Just now";
+    }
+
+    if (minutes < 60) {
+        return `${minutes}m ago`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+        return `${hours}h ago`;
+    }
+
+    const days = Math.floor(hours / 24);
+
+    if (days < 7) {
+        return `${days}d ago`;
+    }
+
+    return date.toLocaleDateString([], {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+    });
+}
+
+/*
+ * Mark one notification as read.
+ */
+async function markNotificationAsRead(notificationId) {
+    const notification = state.notifications.find(
+        item => String(item.id) === String(notificationId)
+    );
+
+    if (!notification || notification.read) {
+        return;
+    }
+
+    try {
+        await apiRequest(`/notifications/${notificationId}/read`, {
+            method: "PATCH"
+        });
+
+        notification.read = true;
+
+        await loadUnreadNotificationCount();
+
+        renderNotifications();
+
+    } catch (error) {
+        console.error("Could not mark notification as read:", error);
+
+        showToast(
+            error.message || "Could not update notification."
+        );
+    }
+}
+
+/*
+ * Mark all currently loaded unread notifications from one group as read.
+ *
+ * The backend currently exposes a per-notification read endpoint,
+ * so each loaded notification is updated individually.
+ */
+async function markGroupNotificationsAsRead(groupItem) {
+    const unreadNotifications = groupItem.notifications.filter(
+        notification => !notification.read
+    );
+
+    if (unreadNotifications.length === 0) {
+        return;
+    }
+
+    const results = await Promise.allSettled(
+        unreadNotifications.map(notification =>
+            apiRequest(
+                `/notifications/${notification.id}/read`,
+                {
+                    method: "PATCH"
+                }
+            )
+        )
+    );
+
+    results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+            unreadNotifications[index].read = true;
+        }
+    });
+
+    const failedCount = results.filter(
+        result => result.status === "rejected"
+    ).length;
+
+    await loadUnreadNotificationCount();
+
+    renderNotifications();
+
+    if (failedCount > 0) {
+        showToast(
+            "Some group notifications could not be marked as read."
+        );
+    }
+}
+
+/*
+ * Open a group conversation from its grouped notification.
+ */
+async function openGroupNotification(groupItem) {
+    closeNotificationDropdown();
+
+    await markGroupNotificationsAsRead(groupItem);
+
+    await openNotificationConversation(
+        groupItem.conversationId
+    );
+}
+
+/*
+ * Open a conversation using its ID.
+ */
+async function openNotificationConversation(conversationId) {
+    if (!conversationId) {
+        return;
+    }
+
+    const existingConversation = state.conversations.find(
+        conversation =>
+            Number(conversation.id) === Number(conversationId)
+    );
+
+    if (existingConversation) {
+        await openConversation(existingConversation);
+        return;
+    }
+
+    try {
+        const conversation = await apiRequest(
+            `/conversations/${conversationId}`
+        );
+
+        if (!conversation) {
+            throw new Error("The conversation could not be found.");
+        }
+
+        const alreadyExists = state.conversations.some(
+            item => Number(item.id) === Number(conversation.id)
+        );
+
+        if (!alreadyExists) {
+            state.conversations.unshift(conversation);
+
+            renderConversations();
+        }
+
+        await openConversation(conversation);
+
+    } catch (error) {
+        console.error(
+            "Could not open notification conversation:",
+            error
+        );
+
+        showToast(
+            error.message || "Could not open this conversation."
+        );
+    }
+}
+
+/*
+ * Open a normal individual notification.
+ */
+async function openNotification(notification) {
+    closeNotificationDropdown();
+
+    await markNotificationAsRead(notification.id);
+
+    if (!notification.conversationId) {
+        return;
+    }
+
+    await openNotificationConversation(
+        notification.conversationId
+    );
+}
+
+/*
+ * Mark all notifications as read.
+ */
+async function markAllNotificationsAsRead() {
+    const button = document.getElementById(
+        "markAllNotificationsReadButton"
+    );
+
+    if (state.unreadNotificationCount === 0) {
+        return;
+    }
+
+    if (button) {
+        button.disabled = true;
+    }
+
+    try {
+        await apiRequest("/notifications/read-all", {
+            method: "PATCH"
+        });
+
+        state.notifications = state.notifications.map(
+            notification => ({
+                ...notification,
+                read: true
+            })
+        );
+
+        updateUnreadNotificationCount(0);
+
+        renderNotifications();
+
+    } catch (error) {
+        console.error(
+            "Could not mark all notifications as read:",
+            error
+        );
+
+        showToast(
+            error.message || "Could not update notifications."
+        );
+
+    } finally {
+        if (button) {
+            button.disabled =
+                state.unreadNotificationCount === 0;
+        }
+    }
+}
+
 
 async function logout() {
     const button = document.getElementById("logoutButton");
