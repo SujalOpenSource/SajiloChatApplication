@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <meta name="theme-color" content="#f3f6fc">
+    <meta name="description" content="SajiloChat - Stay connected with your friends.">
+
     <title>SajiloChat - Messages</title>
 
     <link rel="stylesheet" href="/css/chat.css">
@@ -12,27 +15,37 @@
     <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js" defer></script>
     <script src="/js/chat.js" defer></script>
 </head>
+
 <body>
 
 <div class="app-shell">
 
+    <!-- Sidebar -->
     <aside class="sidebar">
 
         <header class="sidebar-header">
             <div class="brand">
                 <div class="brand-logo">S</div>
+
                 <div>
                     <h1>SajiloChat</h1>
                     <p>Stay connected</p>
                 </div>
             </div>
 
-            <button id="logoutButton" class="icon-button" title="Logout">
+            <button
+                    id="logoutButton"
+                    class="icon-button"
+                    type="button"
+                    title="Logout"
+                    aria-label="Logout">
                 <span>↪</span>
             </button>
         </header>
 
+        <!-- Current User Profile -->
         <section class="profile-section">
+
             <div class="profile-avatar-container">
                 <div class="avatar" id="myAvatar">U</div>
 
@@ -54,73 +67,138 @@
             </div>
 
             <div class="profile-info">
+
                 <strong id="myName">Loading...</strong>
-                <span id="connectionStatus">Connecting...</span>
+
+                <div class="profile-status">
+                    <span class="online-dot"></span>
+                    <span id="connectionStatus">Connecting...</span>
+                </div>
+
+                <p id="profileBio" class="profile-bio empty-bio">
+                    No bio added yet.
+                </p>
 
                 <div class="profile-picture-actions">
+
+                    <button
+                            type="button"
+                            id="editProfileButton"
+                            class="edit-profile-button">
+                        <span aria-hidden="true">✎</span>
+                        Edit profile
+                    </button>
+
                     <button
                             type="button"
                             id="removeProfilePictureButton"
                             class="remove-picture-button hidden">
                         Remove photo
                     </button>
+
                 </div>
+
             </div>
 
-            <span class="online-dot"></span>
         </section>
 
+        <!-- Sidebar Actions -->
         <div class="sidebar-actions">
             <h2>Messages</h2>
-            <button id="newChatButton" class="new-chat-button">
-                + New chat
-            </button>
+
+            <div class="chat-action-buttons">
+
+                <button
+                        id="newChatButton"
+                        class="new-chat-button"
+                        type="button">
+                    + New chat
+                </button>
+
+                <button
+                        id="newGroupButton"
+                        class="new-group-button"
+                        type="button">
+                    + New group
+                </button>
+
+            </div>
         </div>
 
+        <!-- Private User Search -->
         <div id="searchPanel" class="search-panel hidden">
+
             <input
                     type="search"
                     id="userSearchInput"
                     placeholder="Search username..."
                     autocomplete="off"
             >
+
             <div id="userSearchResults" class="search-results"></div>
+
         </div>
 
+        <!-- Conversations -->
         <div id="conversationList" class="conversation-list">
             <div class="loading-state">Loading conversations...</div>
         </div>
 
     </aside>
 
+    <!-- Main Chat Panel -->
     <main class="chat-panel">
 
+        <!-- Empty State -->
         <section id="emptyState" class="empty-state">
+
             <div class="empty-icon">S</div>
+
             <h2>Welcome to SajiloChat</h2>
+
             <p>Select a conversation or start a new chat.</p>
-            <button id="emptyNewChatButton" class="primary-button">
+
+            <button
+                    id="emptyNewChatButton"
+                    class="primary-button"
+                    type="button">
                 Start a conversation
             </button>
+
         </section>
 
+        <!-- Active Conversation -->
         <section id="activeChat" class="active-chat hidden">
 
             <header class="chat-header">
+
                 <div class="avatar" id="chatAvatar">U</div>
+
                 <div class="chat-contact">
                     <strong id="chatContactName">Contact</strong>
                     <span id="chatContactStatus">Conversation</span>
                 </div>
+
+                <!-- Add Members Button -->
+                <button
+                        type="button"
+                        id="addGroupMembersButton"
+                        class="new-group-button hidden">
+                    + Add members
+                </button>
+
             </header>
 
+            <!-- Messages -->
             <div id="messageList" class="message-list">
                 <div class="loading-state">Loading messages...</div>
             </div>
 
             <div id="typingIndicator" class="typing-indicator"></div>
 
+            <!-- Message Form -->
             <form id="messageForm" class="message-form">
+
                 <textarea
                         id="messageInput"
                         rows="1"
@@ -130,9 +208,14 @@
                         required
                 ></textarea>
 
-                <button id="sendButton" type="submit" title="Send message">
+                <button
+                        id="sendButton"
+                        type="submit"
+                        title="Send message"
+                        aria-label="Send message">
                     ➤
                 </button>
+
             </form>
 
         </section>
@@ -141,7 +224,225 @@
 
 </div>
 
+<!-- Toast Notifications -->
 <div id="toast" class="toast hidden"></div>
+
+<!-- Edit Profile Dialog -->
+<dialog id="editProfileDialog" class="profile-dialog">
+
+    <form id="editProfileForm" class="profile-dialog-form">
+
+        <div class="profile-dialog-header">
+            <div>
+                <h2>Edit your profile</h2>
+                <p>Personalize your SajiloChat profile.</p>
+            </div>
+
+            <span class="profile-dialog-icon">✎</span>
+        </div>
+
+        <label for="editFirstName">First name</label>
+
+        <input
+                type="text"
+                id="editFirstName"
+                maxlength="50"
+                placeholder="Enter your first name"
+                autocomplete="given-name"
+                required
+        >
+
+        <label for="editLastName">Last name</label>
+
+        <input
+                type="text"
+                id="editLastName"
+                maxlength="50"
+                placeholder="Enter your last name"
+                autocomplete="family-name"
+                required
+        >
+
+        <label for="editBio">About</label>
+
+        <textarea
+                id="editBio"
+                maxlength="250"
+                rows="4"
+                placeholder="Tell people something about yourself..."
+        ></textarea>
+
+        <div class="bio-character-hint">
+            Maximum 250 characters
+        </div>
+
+        <div class="profile-dialog-actions">
+
+            <button
+                    type="button"
+                    id="cancelEditProfileButton">
+                Cancel
+            </button>
+
+            <button
+                    type="submit"
+                    id="saveProfileButton">
+                Save changes
+            </button>
+
+        </div>
+
+    </form>
+
+</dialog>
+
+<!-- Create Group Dialog -->
+<dialog id="createGroupDialog" class="group-dialog">
+
+    <form id="createGroupForm" class="group-dialog-form">
+
+        <div class="group-dialog-header">
+            <div>
+                <h2>Create a group</h2>
+                <p>Bring your friends together on SajiloChat.</p>
+            </div>
+
+            <span class="group-dialog-icon">👥</span>
+        </div>
+
+        <!-- Group Name -->
+        <label for="groupNameInput">Group name</label>
+
+        <input
+                type="text"
+                id="groupNameInput"
+                maxlength="100"
+                placeholder="Enter a group name"
+                autocomplete="off"
+                required
+        >
+
+        <!-- Member Search -->
+        <label for="groupMemberSearchInput">Add group members</label>
+
+        <input
+                type="search"
+                id="groupMemberSearchInput"
+                placeholder="Search people by username..."
+                autocomplete="off"
+        >
+
+        <!-- Search Results -->
+        <div
+                id="groupMemberSearchResults"
+                class="group-member-search-results">
+        </div>
+
+        <!-- Selected Members -->
+        <div class="selected-members-section">
+
+            <h3>Selected members</h3>
+
+            <div
+                    id="selectedGroupMembers"
+                    class="selected-group-members">
+
+                <p class="group-empty-selection">
+                    No members selected yet.
+                </p>
+
+            </div>
+
+        </div>
+
+        <!-- Dialog Actions -->
+        <div class="group-dialog-actions">
+
+            <button
+                    type="button"
+                    id="cancelCreateGroupButton">
+                Cancel
+            </button>
+
+            <button
+                    type="submit"
+                    id="createGroupButton">
+                Create group
+            </button>
+
+        </div>
+
+    </form>
+
+</dialog>
+
+<!-- Add Members to Existing Group Dialog -->
+<dialog id="addGroupMembersDialog" class="group-dialog">
+
+    <form id="addGroupMembersForm" class="group-dialog-form">
+
+        <div class="group-dialog-header">
+            <div>
+                <h2>Add group members</h2>
+                <p>Invite more people to this conversation.</p>
+            </div>
+
+            <span class="group-dialog-icon">👥</span>
+        </div>
+
+        <!-- Member Search -->
+        <label for="addGroupMemberSearchInput">Search people</label>
+
+        <input
+                type="search"
+                id="addGroupMemberSearchInput"
+                placeholder="Search people by username..."
+                autocomplete="off"
+        >
+
+        <!-- Search Results -->
+        <div
+                id="addGroupMemberSearchResults"
+                class="group-member-search-results">
+        </div>
+
+        <!-- Selected Members -->
+        <div class="selected-members-section">
+
+            <h3>Selected members</h3>
+
+            <div
+                    id="selectedAddGroupMembers"
+                    class="selected-group-members">
+
+                <p class="group-empty-selection">
+                    No members selected yet.
+                </p>
+
+            </div>
+
+        </div>
+
+        <!-- Dialog Actions -->
+        <div class="group-dialog-actions">
+
+            <button
+                    type="button"
+                    id="cancelAddGroupMembersButton">
+                Cancel
+            </button>
+
+            <button
+                    type="submit"
+                    id="confirmAddGroupMembersButton">
+                Add members
+            </button>
+
+        </div>
+
+    </form>
+
+</dialog>
 
 </body>
 </html>

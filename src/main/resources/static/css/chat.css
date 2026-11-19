@@ -475,10 +475,27 @@ button {
 ========================================= */
 
 .typing-indicator {
-    min-height: 20px;
-    padding: 0 25px;
+    min-height: 24px;
+    padding: 3px 25px 5px;
+
+    display: flex;
+    align-items: center;
+
     color: #8490a3;
     font-size: 12px;
+    font-weight: 500;
+
+    opacity: 0;
+    visibility: hidden;
+
+    transition:
+            opacity 0.2s ease,
+            visibility 0.2s ease;
+}
+
+.typing-indicator.visible {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* =========================================
@@ -651,6 +668,11 @@ button {
     .message-bubble {
         max-width: 85%;
     }
+
+    .typing-indicator {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
 }
 
 /* =========================================
@@ -719,5 +741,520 @@ button {
 
     .message-bubble {
         max-width: 85%;
+    }
+
+    .typing-indicator {
+        padding-left: 10px;
+        padding-right: 10px;
+        font-size: 11px;
+    }
+}
+
+/* =========================================
+   PROFILE BIO
+========================================= */
+
+.profile-bio {
+    max-width: 260px;
+    margin: 8px auto 14px;
+    padding: 10px 14px;
+    color: #475569;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: center;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.profile-bio:not(.empty-bio) {
+    background: #eff6ff;
+    border-color: #dbeafe;
+    color: #334155;
+}
+
+.profile-bio.empty-bio {
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* =========================================
+   EDIT PROFILE BUTTON
+========================================= */
+
+.edit-profile-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.edit-profile-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 16px rgba(37, 99, 235, 0.25);
+}
+
+.edit-profile-button:active {
+    transform: translateY(0);
+}
+
+/* =========================================
+   EDIT PROFILE DIALOG
+========================================= */
+
+.profile-dialog {
+    width: min(440px, calc(100% - 32px));
+    padding: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background: #ffffff;
+    color: #172033;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+}
+
+.profile-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(5px);
+}
+
+.profile-dialog-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 28px;
+}
+
+.profile-dialog-form h2 {
+    margin: 0;
+    color: #172033;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.profile-dialog-form > p {
+    margin: 0 0 12px;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.profile-dialog-form label {
+    margin-top: 6px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.profile-dialog-form input,
+.profile-dialog-form textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    outline: none;
+    background: #f8fafc;
+    color: #172033;
+    font: inherit;
+    font-size: 14px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.profile-dialog-form input:focus,
+.profile-dialog-form textarea:focus {
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.profile-dialog-form textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+
+.profile-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.profile-dialog-actions button {
+    padding: 11px 18px;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+#cancelEditProfileButton {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+#cancelEditProfileButton:hover {
+    background: #e2e8f0;
+}
+
+#saveProfileButton {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+#saveProfileButton:hover {
+    background: #1d4ed8;
+}
+
+#saveProfileButton:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+    .profile-dialog-form {
+        padding: 22px;
+    }
+
+    .profile-bio {
+        max-width: 100%;
+    }
+}
+
+/* =========================================
+   SIDEBAR CHAT ACTION BUTTONS
+========================================= */
+
+.chat-action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.new-chat-button,
+.new-group-button {
+    padding: 9px 11px;
+    border: none;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 650;
+    white-space: nowrap;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.new-chat-button {
+    background: #2861ed;
+    color: #ffffff;
+}
+
+.new-chat-button:hover {
+    background: #194fda;
+    transform: translateY(-1px);
+}
+
+.new-group-button {
+    background: #edf3ff;
+    color: #285fe5;
+}
+
+.new-group-button:hover {
+    background: #dce8ff;
+    transform: translateY(-1px);
+}
+
+/* =========================================
+   CREATE GROUP DIALOG
+========================================= */
+
+.group-dialog {
+    width: min(480px, calc(100% - 32px));
+    max-height: min(85vh, 720px);
+    padding: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background: #ffffff;
+    color: #172033;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+    overflow: auto;
+}
+
+.group-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(5px);
+}
+
+.group-dialog-form {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 27px;
+}
+
+.group-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 12px;
+}
+
+.group-dialog-header h2 {
+    margin: 0;
+    color: #172033;
+    font-size: 22px;
+    font-weight: 750;
+}
+
+.group-dialog-header p {
+    margin: 7px 0 0;
+    color: #8792a5;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.group-dialog-icon {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 15px;
+    background: #edf3ff;
+    font-size: 23px;
+}
+
+.group-dialog-form label {
+    margin-top: 5px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.group-dialog-form > input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    outline: none;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 14px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.group-dialog-form > input:focus {
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* =========================================
+   GROUP MEMBER SEARCH RESULTS
+========================================= */
+
+.group-member-search-results {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid #edf0f5;
+    border-radius: 10px;
+}
+
+.group-member-search-results:empty {
+    display: none;
+}
+
+.group-member-result {
+    width: 100%;
+    padding: 11px 12px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    border: 0;
+    border-bottom: 1px solid #edf0f5;
+    background: #ffffff;
+    text-align: left;
+    cursor: pointer;
+}
+
+.group-member-result:last-child {
+    border-bottom: 0;
+}
+
+.group-member-result:hover {
+    background: #f4f7ff;
+}
+
+.group-member-result .member-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.group-member-result .member-details strong {
+    font-size: 13px;
+}
+
+.group-member-result .member-details small {
+    color: #8994a7;
+    font-size: 11px;
+}
+
+.group-member-result .member-add-icon {
+    color: #2861ed;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+/* =========================================
+   SELECTED GROUP MEMBERS
+========================================= */
+
+.selected-members-section {
+    margin-top: 8px;
+}
+
+.selected-members-section h3 {
+    margin: 0 0 10px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.selected-group-members {
+    min-height: 55px;
+    max-height: 145px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 8px;
+    padding: 10px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 11px;
+    background: #f8fafc;
+}
+
+.group-empty-selection {
+    width: 100%;
+    margin: 8px 0;
+    color: #94a3b8;
+    font-size: 12px;
+    text-align: center;
+}
+
+.selected-member-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+    border: 1px solid #dbeafe;
+    border-radius: 20px;
+    background: #eff6ff;
+    color: #285fe5;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.remove-selected-member {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: #dbeafe;
+    color: #285fe5;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.remove-selected-member:hover {
+    background: #bfdbfe;
+}
+
+/* =========================================
+   CREATE GROUP ACTIONS
+========================================= */
+
+.group-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.group-dialog-actions button {
+    padding: 11px 18px;
+    border: 0;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+#cancelCreateGroupButton {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+#cancelCreateGroupButton:hover {
+    background: #e2e8f0;
+}
+
+#createGroupButton {
+    background: #2861ed;
+    color: #ffffff;
+}
+
+#createGroupButton:hover {
+    background: #194fda;
+}
+
+#createGroupButton:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* =========================================
+   RESPONSIVE GROUP DIALOG
+========================================= */
+
+@media (max-width: 560px) {
+    .sidebar-actions {
+        gap: 8px;
+    }
+
+    .chat-action-buttons {
+        gap: 5px;
+    }
+
+    .new-chat-button,
+    .new-group-button {
+        padding: 9px 8px;
+        font-size: 10px;
+    }
+
+    .group-dialog-form {
+        padding: 21px;
+    }
+
+    .group-dialog-header h2 {
+        font-size: 19px;
     }
 }
