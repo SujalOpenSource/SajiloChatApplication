@@ -21,9 +21,6 @@ public class MessageController {
 
     private final MessageService messageService;
 
-    /**
-     * Send a message to a conversation.
-     */
     @PostMapping("/api/v1/conversations/{conversationId}/messages")
     public ResponseEntity<MessageResponse> sendMessage(
             @PathVariable Long conversationId,
@@ -39,9 +36,6 @@ public class MessageController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    /**
-     * Retrieve all messages belonging to a conversation.
-     */
     @GetMapping("/api/v1/conversations/{conversationId}/messages")
     public ResponseEntity<List<MessageResponse>> getMessages(
             @PathVariable Long conversationId,
@@ -55,9 +49,6 @@ public class MessageController {
         return ResponseEntity.ok(messages);
     }
 
-    /**
-     * Edit a message sent by the authenticated user.
-     */
     @PatchMapping("/api/v1/messages/{messageId}")
     public ResponseEntity<MessageResponse> editMessage(
             @PathVariable Long messageId,
@@ -74,7 +65,7 @@ public class MessageController {
     }
 
     /**
-     * Soft-delete a message sent by the authenticated user.
+     * Delete for everyone.
      */
     @DeleteMapping("/api/v1/messages/{messageId}")
     public ResponseEntity<Void> deleteMessage(
@@ -82,6 +73,22 @@ public class MessageController {
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         messageService.deleteMessage(
+                messageId,
+                principal.getUserId()
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Delete only for the authenticated user.
+     */
+    @DeleteMapping("/api/v1/messages/{messageId}/me")
+    public ResponseEntity<Void> deleteMessageForMe(
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        messageService.deleteMessageForMe(
                 messageId,
                 principal.getUserId()
         );

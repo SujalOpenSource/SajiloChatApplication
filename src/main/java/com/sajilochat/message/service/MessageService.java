@@ -11,7 +11,9 @@ import com.sajilochat.message.dto.EditMessageRequest;
 import com.sajilochat.message.dto.MessageResponse;
 import com.sajilochat.message.dto.SendMessageRequest;
 import com.sajilochat.message.entity.Message;
+import com.sajilochat.message.entity.MessageUserDeletion;
 import com.sajilochat.message.repository.MessageRepository;
+import com.sajilochat.message.repository.MessageUserDeletionRepository;
 import com.sajilochat.messagestatus.service.MessageStatusService;
 import com.sajilochat.notification.service.NotificationService;
 import com.sajilochat.user.entity.User;
@@ -28,6 +30,7 @@ import java.util.List;
 public class MessageService {
 
     private final MessageRepository messageRepository;
+    private final MessageUserDeletionRepository messageUserDeletionRepository;
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
     private final MessageStatusService messageStatusService;
@@ -48,8 +51,6 @@ public class MessageService {
                         new ResourceNotFoundException("User not found")
                 );
 
-        // Enforce blocking only for private conversations.
-        // Group conversations remain unaffected.
         if (conversation.getType() == ConversationType.PRIVATE) {
             ensureNoBlockRelationship(conversation, senderId);
         }
@@ -80,16 +81,51 @@ public class MessageService {
         return mapToResponse(savedMessage);
     }
 
+    /**
+     * Retrieves messages visible to the authenticated user.
+     *
+     * Private conversations retain their existing history.
+     * Group conversations only return messages created after
+     * the user's current membership started.
+     */
     @Transactional(readOnly = true)
     public List<MessageResponse> getMessages(
             Long conversationId,
             Long userId
     ) {
-        findConversationForMember(conversationId, userId);
+        Conversation conversation =
+                findConversationForMember(conversationId, userId);
 
+        // Private conversations retain their existing full history.
+        if (conversation.getType() == ConversationType.PRIVATE) {
+            return messageRepository
+                    .findByConversationIdAndDeletedAtIsNullOrderByCreatedAtAsc(
+                            conversationId
+                    )
+                    .stream()
+                    .map(this::mapToResponse)
+                    .toList();
+        }
+
+        // Find the user's current group membership.
+        Instant joinedAt = conversation.getMembers()
+                .stream()
+                .filter(member ->
+                        member.getUser().getId().equals(userId)
+                )
+                .map(member -> member.getJoinedAt())
+                .findFirst()
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Group membership not found"
+                        )
+                );
+
+        // Only show messages from the current membership period.
         return messageRepository
-                .findByConversationIdAndDeletedAtIsNullOrderByCreatedAtAsc(
-                        conversationId
+                .findByConversationIdAndDeletedAtIsNullAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(
+                        conversationId,
+                        joinedAt
                 )
                 .stream()
                 .map(this::mapToResponse)
@@ -115,21 +151,27 @@ public class MessageService {
                 userId
         );
 
-        String content = request.content().trim();
-
-        if (content.isEmpty()) {
+        if (request.content() == null ||
+                request.content().trim().isEmpty()) {
             throw new BadRequestException(
                     "Message content cannot be empty"
             );
         }
+
+        String content = request.content().trim();
 
         message.editContent(content);
 
         return mapToResponse(message);
     }
 
+    /**
+     * Deletes a message for everyone.
+     * Only its original sender can perform this operation.
+     */
     @Transactional
     public void deleteMessage(Long messageId, Long userId) {
+
         Message message = messageRepository
                 .findByIdAndSenderIdAndDeletedAtIsNull(messageId, userId)
                 .orElseThrow(() ->
@@ -144,6 +186,40 @@ public class MessageService {
         );
 
         message.softDelete();
+    }
+
+    /**
+     * Hides a message only for the authenticated user.
+     */
+    @Transactional
+    public void deleteMessageForMe(Long messageId, Long userId) {
+
+        Message message = messageRepository
+                .findByIdAndDeletedAtIsNull(messageId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Message not found"
+                        )
+                );
+
+        findConversationForMember(
+                message.getConversation().getId(),
+                userId
+        );
+
+        if (messageUserDeletionRepository
+                .existsByMessageIdAndUserId(messageId, userId)) {
+            return;
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found")
+                );
+
+        messageUserDeletionRepository.save(
+                new MessageUserDeletion(message, user)
+        );
     }
 
     private void ensureNoBlockRelationship(
@@ -195,8 +271,8 @@ public class MessageService {
                 );
     }
 
-
     private MessageResponse mapToResponse(Message message) {
+
         User sender = message.getSender();
 
         return new MessageResponse(
@@ -216,5 +292,4 @@ public class MessageService {
                 message.getUpdatedAt()
         );
     }
-
 }

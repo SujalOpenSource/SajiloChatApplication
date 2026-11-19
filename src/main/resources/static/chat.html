@@ -14,8 +14,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js" defer></script>
     <script src="/js/chat.js" defer></script>
-    <script src="/js/message-actions.js"></script>
-    <script src ="/js/group-management.js"></script>
+    <script src="/js/message-actions.js" defer></script>
+    <script src ="/js/group-management.js" defer></script>
 </head>
 
 <body>
@@ -256,6 +256,15 @@
                         id="addGroupMembersButton"
                         class="new-group-button hidden">
                     + Add members
+                </button>
+
+
+                <!-- Group Management Button -->
+                <button
+                        type="button"
+                        id="groupManagementButton"
+                        class="new-group-button hidden">
+                    Group settings
                 </button>
 
             </header>
@@ -523,6 +532,47 @@
         </div>
 
     </form>
+
+</dialog>
+
+
+<!-- Group Management Dialog -->
+<dialog id="groupManagementDialog" class="group-dialog">
+
+    <div class="group-dialog-form">
+
+        <div class="group-dialog-header">
+            <div>
+                <h2 id="groupManagementTitle">Group settings</h2>
+                <p id="groupMemberCount">Manage your group members.</p>
+            </div>
+
+            <span class="group-dialog-icon">👥</span>
+        </div>
+
+        <h3>Group members</h3>
+
+        <div id="groupManagementMemberList"
+             class="selected-group-members">
+        </div>
+
+        <div class="group-dialog-actions">
+
+            <button
+                    type="button"
+                    id="leaveGroupButton">
+                Leave group
+            </button>
+
+            <button
+                    type="button"
+                    id="closeGroupManagementButton">
+                Close
+            </button>
+
+        </div>
+
+    </div>
 
 </dialog>
 

@@ -1601,3 +1601,503 @@ button {
         max-height: min(370px, calc(100dvh - 155px));
     }
 }
+
+/* =========================================
+   MESSAGE ACTIONS
+========================================= */
+
+.message-row {
+    position: relative;
+}
+
+.message-actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin: 0 5px;
+}
+
+.message-actions-trigger {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.message-actions-trigger:hover {
+    background: rgba(128, 128, 128, 0.15);
+}
+
+.message-actions-menu {
+    position: absolute;
+    z-index: 100;
+    right: 0;
+    top: 32px;
+    min-width: 180px;
+    padding: 6px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 10px;
+    background: var(--card-background, #ffffff);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.message-actions-menu button {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.message-actions-menu button:hover {
+    background: rgba(128, 128, 128, 0.12);
+}
+
+.message-actions-menu button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* =========================================
+   GROUP DETAILS BUTTON
+========================================= */
+
+.group-details-button {
+    margin-left: auto;
+    padding: 9px 14px;
+    border: 1px solid #dbe3ef;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #334155;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.group-details-button:hover {
+    background: #f1f5f9;
+}
+
+.group-details-button[hidden] {
+    display: none;
+}
+
+/* =========================================
+   GROUP MANAGEMENT DIALOG
+========================================= */
+
+.group-management-dialog {
+    width: min(560px, calc(100% - 28px));
+    max-height: 85vh;
+    padding: 22px;
+    border: none;
+    border-radius: 16px;
+    background: #ffffff;
+    color: #172033;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+}
+
+.group-management-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(3px);
+}
+
+.group-management-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.group-management-header h2 {
+    margin: 0 0 5px;
+    font-size: 21px;
+}
+
+.group-management-header p {
+    margin: 0;
+    color: #64748b;
+    font-size: 13px;
+}
+
+#closeGroupManagement {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: #f1f5f9;
+    color: #334155;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.group-management-members {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 52vh;
+    overflow-y: auto;
+}
+
+.group-management-member {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+.group-management-member-details {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.group-management-member-details strong {
+    overflow-wrap: anywhere;
+}
+
+.group-management-member-details small {
+    color: #64748b;
+}
+
+.group-member-role {
+    padding: 4px 8px;
+    border-radius: 20px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.group-member-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.group-member-actions button {
+    padding: 7px 9px;
+    border: 1px solid #dbe3ef;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.group-member-actions button:hover {
+    background: #f1f5f9;
+}
+
+.group-member-actions .remove-group-member {
+    border-color: #fecaca;
+    color: #dc2626;
+}
+
+.group-management-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.leave-group-button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    background: #dc2626;
+    color: #ffffff;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.leave-group-button:hover {
+    background: #b91c1c;
+}
+
+.leave-group-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* =========================================
+   RESPONSIVE GROUP MANAGEMENT
+========================================= */
+
+@media (max-width: 520px) {
+    .group-management-dialog {
+        padding: 16px;
+    }
+
+    .group-management-member {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .group-member-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .group-details-button {
+        padding: 7px 9px;
+        font-size: 12px;
+    }
+
+    .message-actions-trigger {
+        width: 26px;
+        height: 26px;
+    }
+}
+
+/* =========================================
+   GROUP MANAGEMENT
+========================================= */
+
+.group-member-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 0;
+    border-bottom: 1px solid #edf0f5;
+}
+
+.group-member-details {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.group-member-details strong {
+    color: #172033;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.group-member-role {
+    color: #667085;
+    font-size: 11px;
+}
+
+.group-member-you {
+    color: #2861ed;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.group-member-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.group-action-button {
+    padding: 7px 10px;
+    border: 1px solid #dce4f3;
+    border-radius: 7px;
+    background: #f5f8ff;
+    color: #285fe5;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.group-action-button:hover {
+    background: #eaf0ff;
+}
+
+.group-action-button.danger-button {
+    border-color: #f4d5d5;
+    background: #fff5f5;
+    color: #d93636;
+}
+
+.group-action-button.danger-button:hover {
+    background: #ffe8e8;
+}
+
+.group-action-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+    .group-member-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .group-member-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* =========================================
+   GROUP MANAGEMENT DIALOG - LAYOUT FIX
+========================================= */
+
+#groupManagementDialog {
+    width: min(560px, calc(100vw - 32px));
+    max-width: 560px;
+    max-height: min(720px, calc(100dvh - 32px));
+    padding: 0;
+    border: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #ffffff;
+    color: #172033;
+}
+
+#groupManagementDialog::backdrop {
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(3px);
+}
+
+#groupManagementDialog .group-dialog-form {
+    display: flex;
+    flex-direction: column;
+    max-height: min(720px, calc(100dvh - 32px));
+    padding: 24px;
+    overflow: hidden;
+}
+
+#groupManagementDialog .group-dialog-header {
+    flex-shrink: 0;
+    margin-bottom: 22px;
+}
+
+#groupManagementDialog h3 {
+    flex-shrink: 0;
+    margin: 0 0 14px;
+    font-size: 16px;
+}
+
+#groupManagementMemberList {
+    min-height: 100px;
+    max-height: 390px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 12px;
+    border: 1px solid #e5eaf2;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.group-member-row {
+    min-height: 66px;
+    padding: 12px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border-bottom: 1px solid #edf0f5;
+}
+
+.group-member-row:last-child {
+    border-bottom: 0;
+}
+
+.group-member-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.group-member-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.group-action-button {
+    min-height: 36px;
+    padding: 7px 12px;
+    border: 1px solid #dce4f3;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #285fe5;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.group-action-button:hover {
+    background: #f2f6ff;
+}
+
+.group-action-button.danger-button {
+    border-color: #f4cccc;
+    background: #fff7f7;
+    color: #d93636;
+}
+
+.group-action-button.danger-button:hover {
+    background: #ffeded;
+}
+
+#groupManagementDialog .group-dialog-actions {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 18px;
+    margin-top: 14px;
+    border-top: 1px solid #edf0f5;
+}
+
+#groupManagementDialog .group-dialog-actions button {
+    min-height: 40px;
+    padding: 9px 18px;
+    border-radius: 9px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+@media (max-width: 520px) {
+    #groupManagementDialog {
+        width: calc(100vw - 20px);
+        max-height: calc(100dvh - 20px);
+        border-radius: 14px;
+    }
+
+    #groupManagementDialog .group-dialog-form {
+        max-height: calc(100dvh - 20px);
+        padding: 18px;
+    }
+
+    #groupManagementMemberList {
+        max-height: 50dvh;
+    }
+
+    .group-member-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .group-member-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
