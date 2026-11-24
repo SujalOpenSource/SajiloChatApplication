@@ -83,10 +83,9 @@ public class MessageService {
 
     /**
      * Retrieves messages visible to the authenticated user.
-     *
-     * Private conversations retain their existing history.
-     * Group conversations only return messages created after
-     * the user's current membership started.
+     * Private conversations retain their full history.
+     * Group conversations only return messages created during
+     * the user's current membership period.
      */
     @Transactional(readOnly = true)
     public List<MessageResponse> getMessages(

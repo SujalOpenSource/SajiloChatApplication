@@ -2,6 +2,7 @@
 package com.sajilochat.message.entity;
 
 import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.message.enums.MessageType;
 import com.sajilochat.user.entity.User;
 import jakarta.persistence.*;
@@ -69,6 +70,26 @@ public class Message {
         message.conversation = conversation;
         message.sender = sender;
         message.type = MessageType.TEXT;
+        message.content = content;
+
+        return message;
+    }
+
+    public static Message createSystemMessage(
+            Conversation conversation,
+            User actor,
+            String content
+    ) {
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new IllegalArgumentException(
+                    "System activity messages are only supported in groups"
+            );
+        }
+
+        Message message = new Message();
+        message.conversation = conversation;
+        message.sender = actor;
+        message.type = MessageType.SYSTEM;
         message.content = content;
 
         return message;

@@ -2101,3 +2101,30 @@ button {
         justify-content: flex-start;
     }
 }
+
+/* =========================================
+   GROUP SYSTEM ACTIVITY MESSAGES
+========================================= */
+
+.group-system-message {
+    width: fit-content;
+    max-width: min(85%, 480px);
+    margin: 12px auto;
+    padding: 9px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid #e7ebf2;
+    border-radius: 12px;
+    background: #f3f5f9;
+    color: #596579;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.group-system-message small {
+    color: #8993a4;
+    font-size: 10px;
+}
