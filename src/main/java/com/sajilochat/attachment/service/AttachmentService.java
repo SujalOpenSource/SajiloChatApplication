@@ -8,6 +8,7 @@ import com.sajilochat.block.repository.BlockRepository;
 import com.sajilochat.common.exception.BadRequestException;
 import com.sajilochat.common.exception.ResourceNotFoundException;
 import com.sajilochat.conversation.entity.Conversation;
+import com.sajilochat.conversation.entity.ConversationMember;
 import com.sajilochat.conversation.enums.ConversationType;
 import com.sajilochat.conversation.repository.ConversationRepository;
 import com.sajilochat.message.entity.Message;
@@ -33,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -66,6 +68,7 @@ public class AttachmentService {
     @Value("${app.file.storage-dir:./uploads/attachments}")
     private String storageDirectory;
 
+
     // =====================================================
     // UPLOAD ATTACHMENT
     // =====================================================
@@ -87,6 +90,9 @@ public class AttachmentService {
                 conversation.getId(),
                 userId
         );
+
+        // Prevent access to messages from before a group rejoin.
+        verifyMessageVisibleToCurrentMembership(message, userId);
 
         ensureNoBlockRelationship(conversation, userId);
 
@@ -136,9 +142,7 @@ public class AttachmentService {
         // Never trust the MIME type supplied by the browser.
         validateActualFileContent(fileBytes, extension);
 
-        Path storageRoot = Paths.get(storageDirectory)
-                .toAbsolutePath()
-                .normalize();
+        Path storageRoot = getStorageRoot();
 
         String storedFileName = UUID.randomUUID() + extension;
 
@@ -192,6 +196,7 @@ public class AttachmentService {
             );
         }
     }
+
 
     // =====================================================
     // FILE VALIDATION
@@ -399,6 +404,7 @@ public class AttachmentService {
         return value & 0xFF;
     }
 
+
     // =====================================================
     // GET MESSAGE ATTACHMENTS
     // =====================================================
@@ -417,6 +423,9 @@ public class AttachmentService {
                 userId
         );
 
+        // Do not expose attachments from before a group rejoin.
+        verifyMessageVisibleToCurrentMembership(message, userId);
+
         ensureNoBlockRelationship(conversation, userId);
 
         return attachmentRepository
@@ -425,6 +434,7 @@ public class AttachmentService {
                 .map(this::mapToResponse)
                 .toList();
     }
+
 
     // =====================================================
     // DOWNLOAD ATTACHMENT
@@ -440,17 +450,21 @@ public class AttachmentService {
                         new ResourceNotFoundException("Attachment not found")
                 );
 
-        Conversation conversation =
-                attachment.getMessage().getConversation();
+        Message message = attachment.getMessage();
+
+        Conversation conversation = message.getConversation();
 
         verifyConversationMembership(
                 conversation.getId(),
                 userId
         );
 
+        // Do not allow downloading attachments from before rejoining.
+        verifyMessageVisibleToCurrentMembership(message, userId);
+
         ensureNoBlockRelationship(conversation, userId);
 
-        if (attachment.getMessage().getDeletedAt() != null) {
+        if (message.getDeletedAt() != null) {
             throw new ResourceNotFoundException("Message not found");
         }
 
@@ -477,6 +491,7 @@ public class AttachmentService {
         );
     }
 
+
     // =====================================================
     // DELETE ATTACHMENT
     // =====================================================
@@ -499,13 +514,17 @@ public class AttachmentService {
             );
         }
 
-        Conversation conversation =
-                attachment.getMessage().getConversation();
+        Message message = attachment.getMessage();
+
+        Conversation conversation = message.getConversation();
 
         verifyConversationMembership(
                 conversation.getId(),
                 userId
         );
+
+        // Apply the same group rejoin restriction to deletion.
+        verifyMessageVisibleToCurrentMembership(message, userId);
 
         Path storageRoot = getStorageRoot();
 
@@ -533,6 +552,7 @@ public class AttachmentService {
 
         attachmentRepository.delete(attachment);
     }
+
 
     // =====================================================
     // BLOCK ENFORCEMENT
@@ -581,6 +601,7 @@ public class AttachmentService {
         }
     }
 
+
     // =====================================================
     // HELPER METHODS
     // =====================================================
@@ -617,6 +638,55 @@ public class AttachmentService {
             );
         }
     }
+
+
+    // =====================================================
+    // GROUP REJOIN MESSAGE VISIBILITY
+    // =====================================================
+
+    private void verifyMessageVisibleToCurrentMembership(
+            Message message,
+            Long userId
+    ) {
+
+        Conversation originalConversation = message.getConversation();
+
+        // The restriction applies only to group conversations.
+        if (originalConversation.getType() != ConversationType.GROUP) {
+            return;
+        }
+
+        // Load the current membership and its joinedAt timestamp.
+        Conversation conversation = conversationRepository
+                .findByIdAndMemberUserId(
+                        originalConversation.getId(),
+                        userId
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Message not found")
+                );
+
+        Instant joinedAt = conversation.getMembers()
+                .stream()
+                .filter(member ->
+                        member.getUser().getId().equals(userId)
+                )
+                .map(ConversationMember::getJoinedAt)
+                .findFirst()
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Message not found")
+                );
+
+        // Messages created before the current joining time are hidden.
+        if (message.getCreatedAt().isBefore(joinedAt)) {
+            throw new ResourceNotFoundException("Message not found");
+        }
+    }
+
+
+    // =====================================================
+    // STORAGE HELPERS
+    // =====================================================
 
     private Path getStorageRoot() {
 
@@ -664,6 +734,11 @@ public class AttachmentService {
         return fileName.substring(dotIndex).toLowerCase(Locale.ROOT);
     }
 
+
+    // =====================================================
+    // RESPONSE MAPPING
+    // =====================================================
+
     private AttachmentResponse mapToResponse(Attachment attachment) {
 
         return new AttachmentResponse(
@@ -688,6 +763,7 @@ public class AttachmentService {
             // Preserve the original database exception.
         }
     }
+
 
     // =====================================================
     // DOWNLOAD RESPONSE

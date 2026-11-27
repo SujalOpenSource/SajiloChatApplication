@@ -1156,6 +1156,8 @@ function renderMessage(message) {
 
     const container = document.getElementById("messageList");
     const row = document.createElement("div");
+    row.dataset.messageId = message.id;
+    row.dataset.conversationId = message.conversationId;
 
     const sender = message.sender || {};
 

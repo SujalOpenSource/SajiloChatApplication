@@ -167,6 +167,8 @@ public class ConversationAuthorizationInterceptor implements ChannelInterceptor 
                 channel = "typing";
             } else if (destination.endsWith("/reactions")) {
                 channel = "reactions";
+            } else if (destination.endsWith("/attachments")) {
+                channel = "attachments";
             } else {
                 throw new MessageDeliveryException(
                         "Subscription destination is not allowed"

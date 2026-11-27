@@ -9,8 +9,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,6 +25,7 @@ import java.util.List;
 public class AttachmentController {
 
     private final AttachmentService attachmentService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     // Upload an attachment to an existing message
     @PostMapping(
@@ -43,6 +46,14 @@ public class AttachmentController {
                         userPrincipal.getUserId(),
                         file
                 );
+
+        // Publish attachment event to the conversation
+        messagingTemplate.convertAndSend(
+                "/topic/conversations/"
+                        + response.conversationId()
+                        + "/attachments",
+                response
+        );
 
         return ResponseEntity.ok(response);
     }
@@ -106,6 +117,65 @@ public class AttachmentController {
                 )
                 .header("X-Content-Type-Options", "nosniff")
                 .body(download.resource());
+    }
+
+    // Preview an image attachment inside chat
+    @GetMapping("/api/v1/attachments/{attachmentId}/preview")
+    public ResponseEntity<Resource> previewAttachment(
+            @PathVariable Long attachmentId,
+            Authentication authentication
+    ) {
+        UserPrincipal userPrincipal =
+                (UserPrincipal) authentication.getPrincipal();
+
+        AttachmentDownload preview =
+                attachmentService.getAttachment(
+                        attachmentId,
+                        userPrincipal.getUserId()
+                );
+
+        MediaType mediaType;
+
+        try {
+            mediaType = MediaType.parseMediaType(
+                    preview.contentType()
+            );
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity
+                    .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                    .build();
+        }
+
+        List<MediaType> supportedImageTypes = List.of(
+                MediaType.IMAGE_JPEG,
+                MediaType.IMAGE_PNG,
+                MediaType.IMAGE_GIF,
+                MediaType.parseMediaType("image/webp")
+        );
+
+        if (!supportedImageTypes.contains(mediaType)) {
+            return ResponseEntity
+                    .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                    .build();
+        }
+
+        ContentDisposition contentDisposition =
+                ContentDisposition.inline()
+                        .filename(
+                                preview.originalFileName(),
+                                StandardCharsets.UTF_8
+                        )
+                        .build();
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        contentDisposition.toString()
+                )
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Cache-Control", "private, no-store")
+                .body(preview.resource());
     }
 
     // Delete an attachment
